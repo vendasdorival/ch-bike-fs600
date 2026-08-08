@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FS 600 Full Suspension | CH Bike Shop</title>
+  <meta name="description" content="FS 600 Full Suspension com condição especial na CH Bike Shop. R$ 5.000 de desconto e atendimento personalizado." />
+  <style>
+    :root{
+      --yellow:#ffc400;
+      --yellow-2:#ffdb48;
+      --black:#111214;
+      --black-2:#1c1d20;
+      --text:#1b1d20;
+      --muted:#6f7379;
+      --line:#e8e8e8;
+      --white:#fff;
+      --shadow:0 18px 48px rgba(0,0,0,.12);
+      --radius:22px;
+      --max:1180px;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:#fff;line-height:1.45}
+    img{max-width:100%;display:block}
+    a{text-decoration:none;color:inherit}
+    .wrap{width:min(var(--max),calc(100% - 36px));margin:auto}
+    .topbar{height:6px;background:linear-gradient(90deg,var(--yellow) 0 24%,var(--black) 24% 28%,var(--yellow) 28% 100%)}
+    header{padding:24px 0 8px}
+    .nav{display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .logo{width:150px}
+    .mini-cta{background:var(--black);color:#fff;padding:12px 18px;border-radius:999px;font-weight:800;border:2px solid var(--black);transition:.2s}
+    .mini-cta:hover{transform:translateY(-2px);background:var(--yellow);color:#111}
+
+    .hero{padding:28px 0 44px;position:relative;overflow:hidden}
+    .hero:before{content:"";position:absolute;width:330px;height:330px;border-radius:50%;background:radial-gradient(circle,var(--yellow-2),transparent 68%);right:-120px;top:-90px;opacity:.4;pointer-events:none}
+    .hero-grid{display:grid;grid-template-columns:1.06fr .94fr;gap:34px;align-items:center}
+    .eyebrow{display:inline-flex;gap:10px;align-items:center;font-weight:900;text-transform:uppercase;letter-spacing:.12em;font-size:13px}
+    .eyebrow:before{content:"";width:42px;height:4px;background:var(--yellow);display:block}
+    h1{font-size:clamp(48px,7vw,92px);line-height:.9;margin:18px 0 8px;letter-spacing:-.055em}
+    h1 span{color:var(--yellow)}
+    .subtitle{font-size:clamp(22px,3vw,34px);font-weight:900;letter-spacing:.08em;text-transform:uppercase;margin-bottom:18px}
+    .hero-copy{font-size:20px;color:#4e5258;max-width:590px;margin:0 0 26px}
+    .discount{display:inline-flex;align-items:center;gap:16px;background:var(--black);color:#fff;border-radius:18px;padding:18px 22px;box-shadow:var(--shadow);transform:skewX(-3deg)}
+    .discount strong{font-size:clamp(40px,6vw,72px);line-height:.85;color:var(--yellow);letter-spacing:-.04em}
+    .discount span{font-size:18px;font-weight:900;text-transform:uppercase;line-height:1.05}
+    .hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:15px 22px;border-radius:12px;font-weight:900;transition:.2s}
+    .btn.primary{background:var(--yellow);color:#111;box-shadow:0 12px 30px rgba(255,196,0,.25)}
+    .btn.secondary{border:2px solid var(--black);color:var(--black)}
+    .btn:hover{transform:translateY(-2px)}
+    .hero-bike{position:relative}
+    .hero-bike img{filter:drop-shadow(0 20px 18px rgba(0,0,0,.14));transform:scale(1.04)}
+    .badge{position:absolute;right:4%;top:3%;background:var(--yellow);color:#111;font-weight:950;text-transform:uppercase;padding:12px 16px;border-radius:12px;box-shadow:0 12px 24px rgba(0,0,0,.15);transform:rotate(3deg)}
+
+    .trust{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fafafa}
+    .trust-grid{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}
+    .trust-item{padding:20px 12px;font-weight:800}
+    .trust-item:not(:last-child){border-right:1px solid var(--line)}
+
+    section{padding:68px 0}
+    .section-head{text-align:center;max-width:780px;margin:0 auto 34px}
+    .section-head .kicker{font-size:13px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#777}
+    .section-head h2{font-size:clamp(34px,5vw,56px);line-height:1.02;margin:10px 0 12px;letter-spacing:-.035em}
+    .section-head h2 span{color:var(--yellow)}
+    .section-head p{color:#666;font-size:18px;margin:0}
+
+    .feature-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .feature{border:1px solid #e6e6e6;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 10px 26px rgba(0,0,0,.06)}
+    .feature .pic{aspect-ratio:4/3;background:#f2f2f2;overflow:hidden}
+    .feature .pic img{width:100%;height:100%;object-fit:cover}
+    .feature .body{background:var(--black);color:#fff;padding:18px;min-height:150px}
+    .feature h3{font-size:15px;text-transform:uppercase;margin:0 0 7px}
+    .feature h3 span{color:var(--yellow)}
+    .feature p{margin:0;color:#c9cbd0;font-size:14px}
+
+    .specs{background:#f7f7f7}
+    .spec-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .spec{background:#fff;border:1px solid #e5e5e5;padding:18px;border-radius:14px;display:flex;gap:14px;align-items:flex-start}
+    .spec-dot{width:10px;height:10px;background:var(--yellow);border-radius:50%;margin-top:7px;flex:0 0 auto}
+    .spec b{display:block;text-transform:uppercase;font-size:14px;margin-bottom:3px}
+    .spec span{color:#555}
+
+    .offer{padding:72px 0;background:var(--black);color:#fff;position:relative;overflow:hidden}
+    .offer:before{content:"";position:absolute;inset:auto -120px -180px auto;width:420px;height:420px;border-radius:50%;background:var(--yellow);opacity:.08}
+    .offer-grid{display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center}
+    .offer h2{font-size:clamp(38px,6vw,70px);line-height:.98;margin:0 0 16px;letter-spacing:-.04em}
+    .offer h2 span{color:var(--yellow)}
+    .offer p{font-size:19px;color:#c7c8cb;max-width:650px}
+    .offer-card{background:#fff;color:#111;border-radius:22px;padding:28px;box-shadow:var(--shadow)}
+    .offer-card .small{font-weight:900;text-transform:uppercase;letter-spacing:.12em;color:#777;font-size:12px}
+    .offer-card .big{font-size:clamp(48px,7vw,82px);font-weight:950;color:#111;line-height:1;margin:8px 0 4px}
+    .offer-card .big span{color:var(--yellow)}
+    .offer-card .note{color:#666;margin-bottom:18px}
+    .offer-card .btn{width:100%;font-size:18px}
+
+    footer{padding:24px 0;background:#0b0c0e;color:#aaa;text-align:center;font-size:13px}
+    .floating{position:fixed;right:18px;bottom:18px;background:#25D366;color:#fff;width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 12px 26px rgba(0,0,0,.25);z-index:10}
+
+    @media (max-width:900px){
+      .hero-grid,.offer-grid{grid-template-columns:1fr}
+      .hero-copy{font-size:18px}
+      .hero-bike{order:-1}
+      .badge{right:2%;top:4%}
+      .feature-grid{grid-template-columns:repeat(2,1fr)}
+      .trust-grid{grid-template-columns:1fr}
+      .trust-item:not(:last-child){border-right:0;border-bottom:1px solid var(--line)}
+    }
+    @media (max-width:560px){
+      .wrap{width:min(100% - 24px,var(--max))}
+      header{padding-top:16px}
+      .logo{width:126px}
+      .mini-cta{display:none}
+      .hero{padding-top:8px}
+      .hero-grid{gap:10px}
+      .hero-bike img{transform:scale(1.0)}
+      .discount{width:100%;justify-content:center;padding:16px}
+      .discount strong{font-size:48px}
+      .discount span{font-size:15px}
+      .hero-actions{display:grid;grid-template-columns:1fr}
+      .feature-grid{grid-template-columns:1fr}
+      .spec-grid{grid-template-columns:1fr}
+      section{padding:52px 0}
+      .offer{padding:56px 0}
+      .floating{width:54px;height:54px;right:12px;bottom:12px}
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar"></div>
+
+  <header>
+    <div class="wrap nav">
+      <img class="logo" src="assets/logo.png" alt="CH Bike Shop" />
+      <a class="mini-cta" href="#condicao">Conhecer condição especial</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <div class="eyebrow">Performance premium</div>
+          <h1>FS <span>600</span></h1>
+          <div class="subtitle">Full Suspension</div>
+          <p class="hero-copy">Performance, controle e conforto para quem exige mais em cada trilha. Uma configuração de alto nível com uma condição comercial fora do comum.</p>
+          <div class="discount">
+            <strong>R$ 5.000</strong>
+            <span>de<br>desconto</span>
+          </div>
+          <div class="hero-actions">
+            <a class="btn primary" href="#condicao">Quero conhecer a condição especial</a>
+            <a class="btn secondary" href="#detalhes">Ver ficha técnica</a>
+          </div>
+        </div>
+        <div class="hero-bike">
+          <span class="badge">Mega oportunidade</span>
+          <img src="assets/bike-hero.png" alt="Bicicleta Audax FS 600 Full Suspension" />
+        </div>
+      </div>
+    </section>
+
+    <div class="trust">
+      <div class="wrap trust-grid">
+        <div class="trust-item">PRODUTO PREMIUM DE ALTO DESEMPENHO</div>
+        <div class="trust-item">COMPONENTES DE ALTA QUALIDADE</div>
+        <div class="trust-item">ATENDIMENTO ESPECIALIZADO CH BIKE SHOP</div>
+      </div>
+    </div>
+
+    <section id="detalhes">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="kicker">Cada detalhe importa</div>
+          <h2>Equipamentos que justificam <span>cada pedalada</span></h2>
+          <p>Uma seleção de componentes voltada a desempenho, controle e confiança em diferentes terrenos.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <div class="pic"><img src="assets/pneu.png" alt="Pneu Vittoria Mezcal" /></div>
+            <div class="body"><h3>Pneus <span>Vittoria Mezcal</span></h3><p>Grip e rolagem para trilhas, com visual premium de lateral clara.</p></div>
+          </article>
+          <article class="feature">
+            <div class="pic"><img src="assets/suspensao-dianteira.png" alt="Suspensão dianteira RockShox" /></div>
+            <div class="body"><h3>Suspensão dianteira <span>RockShox</span></h3><p>Suspensão a ar, com trava no guidão e configuração Boost.</p></div>
+          </article>
+          <article class="feature">
+            <div class="pic"><img src="assets/amortecedor.png" alt="Amortecedor traseiro RockShox Monarch RT3" /></div>
+            <div class="body"><h3>Amortecedor <span>Monarch RT3</span></h3><p>Conforto e leitura de terreno para uma verdadeira experiência full suspension.</p></div>
+          </article>
+          <article class="feature">
+            <div class="pic"><img src="assets/cambio.png" alt="Câmbio Shimano SLX" /></div>
+            <div class="body"><h3>Câmbio <span>Shimano SLX 12V</span></h3><p>Trocas precisas e ampla faixa para encarar subidas, estradões e trilhas técnicas.</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="specs">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="kicker">Ficha técnica</div>
+          <h2>FS 600 <span>Full Suspension</span></h2>
+          <p>Principais características apresentadas para esta configuração.</p>
+        </div>
+        <div class="spec-grid">
+          <div class="spec"><i class="spec-dot"></i><div><b>Transmissão</b><span>Shimano SLX — 12 velocidades</span></div></div>
+          <div class="spec"><i class="spec-dot"></i><div><b>Suspensão dianteira</b><span>RockShox Sektor / Recon Gold — a ar, trava no guidão e Boost</span></div></div>
+          <div class="spec"><i class="spec-dot"></i><div><b>Suspensão traseira</b><span>RockShox Monarch RT3</span></div></div>
+          <div class="spec"><i class="spec-dot"></i><div><b>Freios</b><span>Hidráulicos Tektro</span></div></div>
+          <div class="spec"><i class="spec-dot"></i><div><b>Cassete</b><span>Shimano SLX 10/51d</span></div></div>
+          <div class="spec"><i class="spec-dot"></i><div><b>Rodas</b><span>Cubo K7 • Aro 29</span></div></div>
+          <div class="spec"><i class="spec-dot"></i><div><b>Pneus</b><span>Vittoria Mezcal</span></div></div>
+          <div class="spec"><i class="spec-dot"></i><div><b>Categoria</b><span>MTB Full Suspension de alto desempenho</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="offer" id="condicao">
+      <div class="wrap offer-grid">
+        <div>
+          <h2>Uma oportunidade <span>fora do comum.</span></h2>
+          <p>Em vez de expor o preço final, queremos que você conheça a bicicleta, entenda o nível da configuração e converse com um consultor sobre a condição especial disponível.</p>
+        </div>
+        <div class="offer-card">
+          <div class="small">Economize</div>
+          <div class="big">R$ <span>5.000</span></div>
+          <div class="note">Condição comercial especial da CH Bike Shop. Consulte disponibilidade e regras da oferta.</div>
+          <a class="btn primary" href="https://wa.me/5544999760735?text=Ol%C3%A1%2C%20quero%20conhecer%20a%20condi%C3%A7%C3%A3o%20especial%20da%20FS%20600." target="_blank" rel="noopener">Falar com um consultor no WhatsApp</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">CH Bike Shop • Condições sujeitas à disponibilidade. Imagens ilustrativas da configuração apresentada.</div>
+  </footer>
+
+  <a class="floating" aria-label="WhatsApp CH Bike Shop" href="https://wa.me/5544999760735?text=Ol%C3%A1%2C%20quero%20conhecer%20a%20condi%C3%A7%C3%A3o%20especial%20da%20FS%20600." target="_blank" rel="noopener">✆</a>
+</body>
+</html>
