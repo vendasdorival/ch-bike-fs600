@@ -61,7 +61,7 @@
 <body>
 <div class="wrap">
   <h1>Personalizador de cores — camisa</h1>
-  <div class="sub">Cada cor original da arte é tratada como uma área independente. O comando altera somente aquela área.</div>
+  <div class="sub">As áreas ficam brancas por padrão. Só o contorno pontilhado muda de cor quando você envia o comando.</div>
 
   <div class="panel">
     <div class="command">
@@ -80,16 +80,16 @@
     </div>
 
     <div class="colors">
-      <div class="color-row"><label>Área AMARELA</label><input type="color" id="yellow" value="#fff212"></div>
-      <div class="color-row"><label>Área VERMELHA</label><input type="color" id="red" value="#ed3237"></div>
-      <div class="color-row"><label>Área BRANCA</label><input type="color" id="white" value="#ffffff"></div>
-      <div class="color-row"><label>GOLA / DETALHE ESCURO</label><input type="color" id="teal" value="#003333"></div>
+      <div class="color-row"><label>MANGA TRADICIONAL — CONTORNO</label><input type="color" id="yellow" value="#000000"></div>
+      <div class="color-row"><label>MANGA RAGLAN — CONTORNO</label><input type="color" id="red" value="#000000"></div>
+      <div class="color-row"><label>CORPO — CONTORNO</label><input type="color" id="white" value="#000000"></div>
+      <div class="color-row"><label>GOLA / DETALHE ESCURO — CONTORNO</label><input type="color" id="teal" value="#000000"></div>
     </div>
     <div id="status" class="status"></div>
   </div>
 
   <div class="stage"><canvas id="shirt"></canvas></div>
-  <div class="legend">Fundo transparente: o preto externo da imagem original não é usado como fundo da exportação.</div>
+  <div class="legend">As três áreas ficam brancas por padrão; os comandos alteram somente seus contornos. O fundo externo permanece transparente.</div>
 </div>
 
 <script>
@@ -99,19 +99,26 @@ const ctx = canvas.getContext("2d", { willReadFrequently:true });
 const cmd = document.getElementById("cmd");
 const status = document.getElementById("status");
 
+let originalPixels = null;
+
 const source = new Image();
 source.onload = () => {
   canvas.width = source.naturalWidth;
   canvas.height = source.naturalHeight;
+  const temp = document.createElement("canvas");
+  temp.width = canvas.width; temp.height = canvas.height;
+  const tctx = temp.getContext("2d");
+  tctx.drawImage(source,0,0);
+  originalPixels = tctx.getImageData(0,0,canvas.width,canvas.height).data;
   reset();
 };
 source.src = IMG_DATA;
 
 const defaults = {
-  yellow:"#fff212",
-  red:"#ed3237",
-  white:"#ffffff",
-  teal:"#003333"
+  yellow:"#000000",
+  red:"#000000",
+  white:"#000000",
+  teal:"#000000"
 };
 let target = {...defaults};
 
@@ -210,36 +217,117 @@ function render() {
   const im = ctx.getImageData(0,0,canvas.width,canvas.height);
   const p = im.data;
 
+  // Mapa de cores-alvo para os contornos.
+  window.outline = {
+    yellow: hexToRgb(target.yellow),
+    red: hexToRgb(target.red),
+    white: hexToRgb(target.white),
+    teal: hexToRgb(target.teal)
+  };
+
+  // A arte original serve somente para localizar as regiões.
+  // O preenchimento das regiões fica branco.
   for (let i=0;i<p.length;i+=4) {
     const r=p[i], g=p[i+1], b=p[i+2], a=p[i+3];
     const region = classify(r,g,b);
 
-    // Remove o fundo preto. Mantém linhas escuras que ficam próximas da camiseta.
-    if (!region) {
-      if (r<12 && g<12 && b<12) {
-        const x=(i/4)%canvas.width, y=Math.floor((i/4)/canvas.width);
-        let near=false;
-        for (let dy=-2;dy<=2 && !near;dy++) for (let dx=-2;dx<=2;dx++) {
-          const xx=x+dx, yy=y+dy;
-          if (xx<0||yy<0||xx>=canvas.width||yy>=canvas.height) continue;
-          const j=(yy*canvas.width+xx)*4;
-          if (classify(p[j],p[j+1],p[j+2])) { near=true; break; }
+    if (region === "yellow" || region === "red" || region === "white") {
+      // Todas as partes da camisa ficam brancas.
+      p[i] = 255;
+      p[i+1] = 255;
+      p[i+2] = 255;
+      p[i+3] = a;
+    }
+  }
+
+  ctx.putImageData(im,0,0);
+
+  // Desenha os contornos coloridos sobre as regiões.
+  // A espessura/efeito pontilhado acompanha a geometria original.
+  const overlay = ctx.getImageData(0,0,canvas.width,canvas.height);
+  const q = overlay.data;
+
+  for (let i=0;i<q.length;i+=4) {
+    const r=q[i], g=q[i+1], b=q[i+2];
+
+    // Como o preenchimento agora é branco, reconstruímos a classificação
+    // usando a imagem original.
+    const srcIndex = i;
+    const sr = originalPixels[srcIndex];
+    const sg = originalPixels[srcIndex+1];
+    const sb = originalPixels[srcIndex+2];
+
+    const region = classify(sr,sg,sb);
+    if (!region || region === "white") continue;
+
+    // Detecta pixels de borda da região na imagem original.
+    const pos = i/4;
+    const x = pos % canvas.width;
+    const y = Math.floor(pos / canvas.width);
+
+    let boundary = false;
+    for (let dy=-1;dy<=1 && !boundary;dy++) {
+      for (let dx=-1;dx<=1;dx++) {
+        if (!dx && !dy) continue;
+        const xx=x+dx, yy=y+dy;
+        if (xx<0||yy<0||xx>=canvas.width||yy>=canvas.height) continue;
+        const j=(yy*canvas.width+xx)*4;
+        const nr=originalPixels[j], ng=originalPixels[j+1], nb=originalPixels[j+2];
+        const nregion=classify(nr,ng,nb);
+        if (nregion !== region) {
+          boundary=true;
+          break;
         }
-        p[i+3]=near?210:0;
       }
-      continue;
     }
 
-    const c=hexToRgb(target[region]);
-    const f=shadeFactor(r,g,b,region);
-    p[i]=Math.min(255,c.r*f);
-    p[i+1]=Math.min(255,c.g*f);
-    p[i+2]=Math.min(255,c.b*f);
-    p[i+3]=a;
+    if (boundary) {
+      const c = window.outline[region];
+      q[i]=c.r; q[i+1]=c.g; q[i+2]=c.b; q[i+3]=255;
+    }
   }
-  ctx.putImageData(im,0,0);
+
+  ctx.putImageData(overlay,0,0);
+
+  // Reforça um contorno limpo e pontilhado com base na máscara da região.
+  drawDottedOutlines();
 }
 
+function drawDottedOutlines() {
+  const w=canvas.width, h=canvas.height;
+
+  const regions = ["yellow","red","white"];
+  for (const region of regions) {
+    const c = window.outline[region] || hexToRgb("#000000");
+    const mask = new Uint8Array(w*h);
+
+    for (let y=0;y<h;y++) {
+      for (let x=0;x<w;x++) {
+        const i=(y*w+x)*4;
+        const sr=originalPixels[i], sg=originalPixels[i+1], sb=originalPixels[i+2];
+        if (classify(sr,sg,sb)===region) mask[y*w+x]=1;
+      }
+    }
+
+    ctx.fillStyle=`rgb(${c.r},${c.g},${c.b})`;
+
+    // Pontilhado fino e discreto, somente no limite externo.
+    for (let y=1;y<h-1;y++) {
+      for (let x=1;x<w-1;x++) {
+        const idx=y*w+x;
+        if (!mask[idx]) continue;
+
+        const edge =
+          !mask[idx-1] || !mask[idx+1] ||
+          !mask[idx-w] || !mask[idx+w];
+
+        if (edge && ((x+y)%6<3)) {
+          ctx.fillRect(x,y,2,2);
+        }
+      }
+    }
+  }
+}
 document.getElementById("apply").onclick=()=>applyCommand(cmd.value);
 cmd.addEventListener("keydown",e=>{if(e.key==="Enter") applyCommand(cmd.value);});
 
