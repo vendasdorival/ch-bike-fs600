@@ -128,7 +128,7 @@
   </div>
 
   <div class="stage"><canvas id="shirt"></canvas></div>
-  <div class="legend">Corpo e mangas continuam funcionando como antes. As golas usam as medidas oficiais do mapa: largura 59,909 mm, início a 99,277 mm da esquerda e 13,2 mm do topo.</div>
+  <div class="legend">Corpo e mangas continuam funcionando como antes. As golas usam um recipiente fixo de 614 × 38 px; a gola selecionada é centralizada nesse encaixe com largura útil de 59,909 mm.</div>
 </div>
 
 <script>
@@ -145,15 +145,16 @@ const COLLAR_DATA = {
   Foram separadas do restante da camisa para que futuras correções de encaixe
   sejam feitas aqui sem alterar corpo, mangas ou a lógica de cores.
 */
-const WORKSPACE_MM = {
-  width: 233.647,
-  height: 222.46
-};
-
-const COLLAR_METRIC = {
-  widthMM: 59.909,
+// RECIPIENTE FIXO DAS GOLAS.
+// 614 x 38 é a caixa de referência/encaixe, NÃO o tamanho visual da gola.
+// A posição usa as medidas oficiais fornecidas para o mapa.
+const WORKSPACE_MM = { width:233.647, height:222.46 };
+const COLLAR_SLOT = {
+  width: 614,
+  height: 38,
   leftMM: 99.277,
-  topMM: 13.2
+  topMM: 13.2,
+  collarWidthMM: 59.909
 };
 
 const collarImages = {};
@@ -390,34 +391,36 @@ function drawActiveCollar() {
   const img = collarImages[activeCollar];
   const tint = hexToRgb(collarColor);
 
-  // Converte as medidas oficiais em mm diretamente para o canvas atual.
-  const pxPerMMx = canvas.width / WORKSPACE_MM.width;
-  const pxPerMMy = canvas.height / WORKSPACE_MM.height;
+  // Conversão do mapa oficial em mm para o canvas interno.
+  const pxPerMmX = canvas.width / WORKSPACE_MM.width;
+  const pxPerMmY = canvas.height / WORKSPACE_MM.height;
 
-  const x = COLLAR_METRIC.leftMM * pxPerMMx;
-  const y = COLLAR_METRIC.topMM * pxPerMMy;
-  const w = COLLAR_METRIC.widthMM * pxPerMMx;
+  // Ponto de referência do recipiente.
+  const slotCenterX = (COLLAR_SLOT.leftMM + COLLAR_SLOT.collarWidthMM/2) * pxPerMmX;
+  const slotTopY = COLLAR_SLOT.topMM * pxPerMmY;
 
-  // A altura permanece proporcional ao arquivo original de cada modelo.
+  // Recipiente lógico mínimo: 614 x 38 px.
+  // A gola fica centralizada nele e sua largura útil é 59,909 mm.
+  const slotX = slotCenterX - COLLAR_SLOT.width/2;
+  const slotY = slotTopY;
+  const collarW = COLLAR_SLOT.collarWidthMM * pxPerMmX;
+
   const naturalW = img.naturalWidth || img.width;
   const naturalH = img.naturalHeight || img.height;
-  const h = w * (naturalH / naturalW);
+  const collarH = collarW * (naturalH / naturalW);
 
   const tmp = document.createElement("canvas");
   tmp.width = naturalW;
   tmp.height = naturalH;
-  const t = tmp.getContext("2d", { willReadFrequently:true });
-  t.drawImage(img, 0, 0);
+  const t = tmp.getContext("2d", {willReadFrequently:true});
+  t.drawImage(img,0,0);
 
-  const im = t.getImageData(0, 0, tmp.width, tmp.height);
-  const p = im.data;
-
-  for (let i=0; i<p.length; i+=4) {
-    if (p[i+3] === 0) continue;
-    const rr=p[i], gg=p[i+1], bb=p[i+2];
-    const lum=0.2126*rr + 0.7152*gg + 0.0722*bb;
-
-    if (lum > 225) {
+  const im=t.getImageData(0,0,tmp.width,tmp.height);
+  const p=im.data;
+  for(let i=0;i<p.length;i+=4){
+    if(p[i+3]===0) continue;
+    const lum=.2126*p[i]+.7152*p[i+1]+.0722*p[i+2];
+    if(lum>225){
       const shade=Math.max(.82,Math.min(1.04,lum/255));
       p[i]=Math.min(255,Math.round(tint.r*shade));
       p[i+1]=Math.min(255,Math.round(tint.g*shade));
@@ -427,9 +430,13 @@ function drawActiveCollar() {
       p[i]=gray; p[i+1]=gray; p[i+2]=gray;
     }
   }
-
   t.putImageData(im,0,0);
-  ctx.drawImage(tmp, x, y, w, h);
+
+  // Centraliza a gola dentro do recipiente; o recipiente permanece invisível.
+  const collarX = slotX + (COLLAR_SLOT.width - collarW)/2;
+  const collarY = slotY;
+
+  ctx.drawImage(tmp, collarX, collarY, collarW, collarH);
 }
 document.getElementById("apply").onclick=()=>applyCommand(cmd.value);
 cmd.addEventListener("keydown",e=>{if(e.key==="Enter") applyCommand(cmd.value);});
