@@ -128,7 +128,7 @@
   </div>
 
   <div class="stage"><canvas id="shirt"></canvas></div>
-  <div class="legend">Corpo e mangas continuam funcionando como antes. As golas ficam no mesmo ponto de encaixe e somente a opção selecionada é exibida.</div>
+  <div class="legend">Geometria preservada. Contornos e demarcações em cinza suave, sem setas indicativas, com sombra externa discreta.</div>
 </div>
 
 <script>
@@ -351,8 +351,9 @@ function render() {
     teal: hexToRgb(target.teal)
   };
 
-  // Reconstrói a arte usando apenas o preenchimento das regiões.
-  // Todo pixel que era linha, seta, contorno ou marcação técnica fica invisível.
+  const regionMap = new Int8Array(canvas.width * canvas.height);
+  const regionId = { yellow:1, red:2, white:3, teal:4 };
+
   for (let i=0; i<p.length; i+=4) {
     const sr = originalPixels[i];
     const sg = originalPixels[i+1];
@@ -372,15 +373,54 @@ function render() {
     p[i+1] = c.g;
     p[i+2] = c.b;
     p[i+3] = sa;
+    regionMap[i >> 2] = regionId[region] || 0;
   }
 
+  const comp = document.createElement("canvas");
+  comp.width = canvas.width;
+  comp.height = canvas.height;
+  const cctx = comp.getContext("2d", { willReadFrequently:true });
+  cctx.putImageData(im, 0, 0);
+
+  const edge = cctx.createImageData(canvas.width, canvas.height);
+  const ep = edge.data;
+  const w = canvas.width, h = canvas.height;
+
+  for (let y=1; y<h-1; y++) {
+    for (let x=1; x<w-1; x++) {
+      const idx = y*w + x;
+      const r0 = regionMap[idx];
+      if (!r0) continue;
+
+      const n1 = regionMap[idx-1];
+      const n2 = regionMap[idx+1];
+      const n3 = regionMap[idx-w];
+      const n4 = regionMap[idx+w];
+
+      if (n1 !== r0 || n2 !== r0 || n3 !== r0 || n4 !== r0) {
+        const j = idx * 4;
+        ep[j] = 110;
+        ep[j+1] = 110;
+        ep[j+2] = 110;
+        ep[j+3] = 13;
+      }
+    }
+  }
+
+  cctx.putImageData(edge, 0, 0);
+
+  drawActiveCollar(cctx);
+
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.putImageData(im,0,0);
-
-  drawActiveCollar();
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.22)";
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 7;
+  ctx.drawImage(comp, 0, 0);
+  ctx.restore();
 }
-
-function drawActiveCollar() {
+function drawActiveCollar(targetCtx = ctx) {
   if (!activeCollar || !collarImages[activeCollar]) return;
 
   const img = collarImages[activeCollar];
@@ -399,7 +439,7 @@ function drawActiveCollar() {
   t.fillRect(0, 0, tmp.width, tmp.height);
   t.globalCompositeOperation = "source-over";
 
-  ctx.drawImage(tmp, pos.x, pos.y, pos.w, pos.h);
+  targetCtx.drawImage(tmp, pos.x, pos.y, pos.w, pos.h);
 }
 
 document.getElementById("apply").onclick=()=>applyCommand(cmd.value);
