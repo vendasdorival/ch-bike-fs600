@@ -128,7 +128,7 @@
   </div>
 
   <div class="stage"><canvas id="shirt"></canvas></div>
-  <div class="legend">Corpo e mangas continuam funcionando como antes. As golas são dimensionadas pelos dois pontos oficiais de encaixe da linha azul; somente a selecionada aparece.</div>
+  <div class="legend">Corpo e mangas continuam funcionando como antes. As golas usam as medidas oficiais do mapa: largura 59,909 mm, início a 99,277 mm da esquerda e 13,2 mm do topo.</div>
 </div>
 
 <script>
@@ -145,18 +145,15 @@ const COLLAR_DATA = {
   Foram separadas do restante da camisa para que futuras correções de encaixe
   sejam feitas aqui sem alterar corpo, mangas ou a lógica de cores.
 */
-const NECK_ANCHOR = {
-  left:  { x:429, y:22 },
-  right: { x:611, y:22 }
+const WORKSPACE_MM = {
+  width: 233.647,
+  height: 222.46
 };
 
-// Pontos A/B dentro de cada PNG limpo.
-// Eles representam SOMENTE a linha superior útil de encaixe da gola.
-// A largura visual abaixo dela não participa do cálculo de escala.
-const COLLAR_SOURCE_ANCHOR = {
-  madrid:  { left:{x:54,y:7},  right:{x:410,y:7} },
-  redonda: { left:{x:23,y:7},  right:{x:157,y:7} },
-  v:       { left:{x:34,y:7},  right:{x:294,y:7} }
+const COLLAR_METRIC = {
+  widthMM: 59.909,
+  leftMM: 99.277,
+  topMM: 13.2
 };
 
 const collarImages = {};
@@ -391,62 +388,48 @@ function drawActiveCollar() {
   if (!activeCollar || !collarImages[activeCollar]) return;
 
   const img = collarImages[activeCollar];
-  const src = COLLAR_SOURCE_ANCHOR[activeCollar];
+  const tint = hexToRgb(collarColor);
 
-  // Distâncias dos dois pontos oficiais de encaixe.
-  const targetDX = NECK_ANCHOR.right.x - NECK_ANCHOR.left.x;
-  const targetDY = NECK_ANCHOR.right.y - NECK_ANCHOR.left.y;
-  const sourceDX = src.right.x - src.left.x;
-  const sourceDY = src.right.y - src.left.y;
+  // Converte as medidas oficiais em mm diretamente para o canvas atual.
+  const pxPerMMx = canvas.width / WORKSPACE_MM.width;
+  const pxPerMMy = canvas.height / WORKSPACE_MM.height;
 
-  const targetDist = Math.hypot(targetDX, targetDY);
-  const sourceDist = Math.hypot(sourceDX, sourceDY);
-  const scale = targetDist / sourceDist;
+  const x = COLLAR_METRIC.leftMM * pxPerMMx;
+  const y = COLLAR_METRIC.topMM * pxPerMMy;
+  const w = COLLAR_METRIC.widthMM * pxPerMMx;
 
-  // Ângulo também é calculado pelos dois pontos, embora hoje seja praticamente zero.
-  const targetAngle = Math.atan2(targetDY, targetDX);
-  const sourceAngle = Math.atan2(sourceDY, sourceDX);
-  const angle = targetAngle - sourceAngle;
+  // A altura permanece proporcional ao arquivo original de cada modelo.
+  const naturalW = img.naturalWidth || img.width;
+  const naturalH = img.naturalHeight || img.height;
+  const h = w * (naturalH / naturalW);
 
-  // Primeiro prepara a gola na escala original, preservando o sombreado central.
   const tmp = document.createElement("canvas");
-  tmp.width = img.naturalWidth || img.width;
-  tmp.height = img.naturalHeight || img.height;
+  tmp.width = naturalW;
+  tmp.height = naturalH;
   const t = tmp.getContext("2d", { willReadFrequently:true });
   t.drawImage(img, 0, 0);
 
   const im = t.getImageData(0, 0, tmp.width, tmp.height);
   const p = im.data;
-  const tint = hexToRgb(collarColor);
 
   for (let i=0; i<p.length; i+=4) {
     if (p[i+3] === 0) continue;
     const rr=p[i], gg=p[i+1], bb=p[i+2];
-    const lum=0.2126*rr+0.7152*gg+0.0722*bb;
+    const lum=0.2126*rr + 0.7152*gg + 0.0722*bb;
 
-    // Somente a faixa clara recebe a cor.
     if (lum > 225) {
       const shade=Math.max(.82,Math.min(1.04,lum/255));
       p[i]=Math.min(255,Math.round(tint.r*shade));
       p[i+1]=Math.min(255,Math.round(tint.g*shade));
       p[i+2]=Math.min(255,Math.round(tint.b*shade));
     } else {
-      // Centro sombreado permanece sólido, não vazado.
       const gray=Math.round(lum);
       p[i]=gray; p[i+1]=gray; p[i+2]=gray;
     }
   }
-  t.putImageData(im,0,0);
 
-  // A transformação faz o ponto A da gola coincidir exatamente com A da camisa.
-  // Como a escala é calculada por A-B, o ponto B também coincide automaticamente.
-  ctx.save();
-  ctx.translate(NECK_ANCHOR.left.x, NECK_ANCHOR.left.y);
-  ctx.rotate(angle);
-  ctx.scale(scale, scale);
-  ctx.translate(-src.left.x, -src.left.y);
-  ctx.drawImage(tmp, 0, 0);
-  ctx.restore();
+  t.putImageData(im,0,0);
+  ctx.drawImage(tmp, x, y, w, h);
 }
 document.getElementById("apply").onclick=()=>applyCommand(cmd.value);
 cmd.addEventListener("keydown",e=>{if(e.key==="Enter") applyCommand(cmd.value);});
