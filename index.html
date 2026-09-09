@@ -128,7 +128,7 @@
   </div>
 
   <div class="stage"><canvas id="shirt"></canvas></div>
-  <div class="legend">Geometria geral preservada. Ajuste localizado: corte superior reto sob a gola e remoção da seta remanescente da manga/raglan direita.</div>
+  <div class="legend">Geometria geral preservada. Ajuste localizado: corte superior reto sob a gola. Demais elementos preservados.</div>
 </div>
 
 <script>
@@ -362,6 +362,20 @@ function render() {
     if (sa === 0) continue;
 
     const region = classify(sr, sg, sb);
+
+    // AJUSTE LOCALIZADO DA GOLA:
+    // remove apenas a curvatura existente no topo central da camisa,
+    // criando uma linha horizontal reta. Não altera mangas, ombros,
+    // corpo, comandos de cores ou qualquer outra região.
+    const pixelIndex = i / 4;
+    const px = pixelIndex % canvas.width;
+    const py = Math.floor(pixelIndex / canvas.width);
+
+    if (px >= 400 && px <= 660 && py < 62) {
+      p[i+3] = 0;
+      continue;
+    }
+
     if (!region) {
       p[i+3] = 0;
       continue;
