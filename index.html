@@ -404,7 +404,243 @@ function render() {
   ctx.putImageData(im,0,0);
 
   drawActiveCollar();
+
+  // REALISMO ESTRUTURAL:
+  // mantém exatamente a geometria atual e acrescenta somente luz/sombra.
+  // Não desenha linhas de contorno.
+  applyRealisticShading();
+
   applyShirtShadow();
+}
+
+// Cache da sombra suave das emendas existentes no molde original.
+let seamShadowCache = null;
+
+function buildSeamShadowCache() {
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const seam = document.createElement("canvas");
+  seam.width = w;
+  seam.height = h;
+  const sctx = seam.getContext("2d", { willReadFrequently:true });
+  const data = sctx.createImageData(w, h);
+  const d = data.data;
+
+  // Detecta apenas transições reais entre as regiões já existentes
+  // no arquivo-base. Isso preserva a construção original do projeto.
+  for (let y = 2; y < h - 2; y++) {
+    for (let x = 2; x < w - 2; x++) {
+      const idx = (y * w + x) * 4;
+      const a = originalPixels[idx + 3];
+      if (a < 40) continue;
+
+      const here = classify(
+        originalPixels[idx],
+        originalPixels[idx + 1],
+        originalPixels[idx + 2]
+      );
+      if (!here) continue;
+
+      let boundary = false;
+      const offsets = [-2, 2, -2*w, 2*w];
+
+      for (const off of offsets) {
+        const ni = idx + off * 4;
+        if (ni < 0 || ni >= originalPixels.length) continue;
+
+        const other = classify(
+          originalPixels[ni],
+          originalPixels[ni + 1],
+          originalPixels[ni + 2]
+        );
+
+        // Só interessa emenda entre duas áreas editáveis diferentes.
+        // O contorno externo não é desenhado aqui.
+        if (other && other !== here) {
+          boundary = true;
+          break;
+        }
+      }
+
+      if (boundary) {
+        d[idx] = 0;
+        d[idx + 1] = 0;
+        d[idx + 2] = 0;
+        d[idx + 3] = 105;
+      }
+    }
+  }
+
+  sctx.putImageData(data, 0, 0);
+
+  const blurred = document.createElement("canvas");
+  blurred.width = w;
+  blurred.height = h;
+  const bctx = blurred.getContext("2d");
+  bctx.filter = "blur(7px)";
+  bctx.drawImage(seam, 0, 0);
+  bctx.filter = "none";
+
+  seamShadowCache = blurred;
+}
+
+function applyRealisticShading() {
+  const w = canvas.width;
+  const h = canvas.height;
+  if (!w || !h) return;
+
+  // Fotografia atual da camisa já recolorida e com a gola ativa.
+  const base = document.createElement("canvas");
+  base.width = w;
+  base.height = h;
+  const bctx = base.getContext("2d");
+  bctx.drawImage(canvas, 0, 0);
+
+  // Máscara baseada exclusivamente na geometria visível atual.
+  const mask = document.createElement("canvas");
+  mask.width = w;
+  mask.height = h;
+  const mctx = mask.getContext("2d");
+  mctx.drawImage(base, 0, 0);
+  mctx.globalCompositeOperation = "source-in";
+  mctx.fillStyle = "#ffffff";
+  mctx.fillRect(0, 0, w, h);
+  mctx.globalCompositeOperation = "source-over";
+
+  // ============================================================
+  // 1) SOMBRA DAS BORDAS PARA DENTRO
+  // Cria um "negativo" da camisa, desfoca e mostra somente
+  // a parte que invade suavemente a silhueta.
+  // Nenhuma linha é desenhada.
+  // ============================================================
+  const outside = document.createElement("canvas");
+  outside.width = w;
+  outside.height = h;
+  const octx = outside.getContext("2d");
+  octx.fillStyle = "#000";
+  octx.fillRect(0, 0, w, h);
+  octx.globalCompositeOperation = "destination-out";
+  octx.drawImage(mask, 0, 0);
+  octx.globalCompositeOperation = "source-over";
+
+  const inner = document.createElement("canvas");
+  inner.width = w;
+  inner.height = h;
+  const ictx = inner.getContext("2d");
+  ictx.filter = "blur(24px)";
+  ictx.drawImage(outside, 0, 0);
+  ictx.filter = "none";
+  ictx.globalCompositeOperation = "destination-in";
+  ictx.drawImage(mask, 0, 0);
+  ictx.globalCompositeOperation = "source-over";
+
+  // Segunda faixa, mais curta, dá definição sem criar contorno.
+  const innerFine = document.createElement("canvas");
+  innerFine.width = w;
+  innerFine.height = h;
+  const ifctx = innerFine.getContext("2d");
+  ifctx.filter = "blur(11px)";
+  ifctx.drawImage(outside, 0, 0);
+  ifctx.filter = "none";
+  ifctx.globalCompositeOperation = "destination-in";
+  ifctx.drawImage(mask, 0, 0);
+  ifctx.globalCompositeOperation = "source-over";
+
+  // ============================================================
+  // 2) SOMBRAS NAS EMENDAS DO PRÓPRIO MOLDE
+  // Detectadas da imagem-base; viram sombra difusa, não linha.
+  // ============================================================
+  if (!seamShadowCache) buildSeamShadowCache();
+
+  // ============================================================
+  // 3) DOBRAS DISCRETAS NA PARTE INFERIOR
+  // São apenas luz/sombra translúcida, recortadas pela camisa.
+  // ============================================================
+  const foldsShadow = document.createElement("canvas");
+  foldsShadow.width = w;
+  foldsShadow.height = h;
+  const fs = foldsShadow.getContext("2d");
+
+  const sx = w / 1060;
+  const sy = h / 1008;
+
+  fs.lineCap = "round";
+  fs.lineJoin = "round";
+  fs.strokeStyle = "rgba(0,0,0,0.50)";
+  fs.lineWidth = 16 * sx;
+  fs.filter = `blur(${10 * sx}px)`;
+
+  const shadowPaths = [
+    [355, 955, 380, 900, 392, 830],
+    [470, 982, 485, 925, 490, 855],
+    [590, 982, 575, 925, 570, 850],
+    [705, 955, 680, 900, 666, 830]
+  ];
+
+  for (const [x1,y1,cx,cy,x2,y2] of shadowPaths) {
+    fs.beginPath();
+    fs.moveTo(x1*sx, y1*sy);
+    fs.quadraticCurveTo(cx*sx, cy*sy, x2*sx, y2*sy);
+    fs.stroke();
+  }
+  fs.filter = "none";
+
+  const foldsLight = document.createElement("canvas");
+  foldsLight.width = w;
+  foldsLight.height = h;
+  const fl = foldsLight.getContext("2d");
+  fl.lineCap = "round";
+  fl.strokeStyle = "rgba(255,255,255,0.65)";
+  fl.lineWidth = 11 * sx;
+  fl.filter = `blur(${9 * sx}px)`;
+
+  const lightPaths = [
+    [376, 958, 398, 906, 408, 842],
+    [488, 980, 500, 930, 505, 866],
+    [572, 980, 560, 930, 555, 862],
+    [684, 958, 662, 906, 652, 842]
+  ];
+
+  for (const [x1,y1,cx,cy,x2,y2] of lightPaths) {
+    fl.beginPath();
+    fl.moveTo(x1*sx, y1*sy);
+    fl.quadraticCurveTo(cx*sx, cy*sy, x2*sx, y2*sy);
+    fl.stroke();
+  }
+  fl.filter = "none";
+
+  // ============================================================
+  // COMPOSIÇÃO FINAL
+  // source-atop impede qualquer efeito de ultrapassar a geometria.
+  // multiply/screen trabalham sobre a cor escolhida, sem substituí-la.
+  // ============================================================
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(base, 0, 0);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-atop";
+
+  ctx.globalAlpha = 0.24;
+  ctx.globalCompositeOperation = "multiply";
+  ctx.drawImage(inner, 0, 0);
+
+  ctx.globalAlpha = 0.09;
+  ctx.drawImage(innerFine, 0, 0);
+
+  if (seamShadowCache) {
+    ctx.globalAlpha = 0.14;
+    ctx.drawImage(seamShadowCache, 0, 0);
+  }
+
+  ctx.globalAlpha = 0.11;
+  ctx.drawImage(foldsShadow, 0, 0);
+
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.08;
+  ctx.drawImage(foldsLight, 0, 0);
+
+  ctx.restore();
 }
 
 // ACABAMENTO PREMIUM — sombra suave ao redor de toda a camisa.
