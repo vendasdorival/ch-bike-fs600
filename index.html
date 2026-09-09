@@ -376,6 +376,18 @@ function render() {
       continue;
     }
 
+    // AJUSTE CIRÚRGICO — remove somente os dois resíduos brancos
+    // que escapavam da geometria da camisa. As máscaras ficam inteiramente
+    // fora do contorno útil, preservando corpo, manga e ombro.
+    const smallLeftArtifact = (px >= 387 && px <= 399 && py < 62);
+    const rightArrowHead = (px >= 717 && px <= 740 && py < (86 + (px - 717) * 0.40));
+    const rightArrowShaft = (px >= 741 && px <= 799 && py < 75);
+
+    if (smallLeftArtifact || rightArrowHead || rightArrowShaft) {
+      p[i+3] = 0;
+      continue;
+    }
+
     if (!region) {
       p[i+3] = 0;
       continue;
@@ -400,19 +412,79 @@ function drawActiveCollar() {
   const img = collarImages[activeCollar];
   const pos = COLLAR_LAYOUT[activeCollar];
   const tint = hexToRgb(collarColor);
+  const w = Math.max(1, Math.round(pos.w));
+  const h = Math.max(1, Math.round(pos.h));
 
+  // Camada 1: mantém a geometria externa da gola editável.
   const tmp = document.createElement("canvas");
-  tmp.width = Math.max(1, Math.round(pos.w));
-  tmp.height = Math.max(1, Math.round(pos.h));
+  tmp.width = w;
+  tmp.height = h;
   const t = tmp.getContext("2d");
-
-  // A imagem é uma máscara transparente da geometria fornecida.
-  t.drawImage(img, 0, 0, tmp.width, tmp.height);
+  t.drawImage(img, 0, 0, w, h);
   t.globalCompositeOperation = "source-in";
   t.fillStyle = `rgb(${tint.r},${tint.g},${tint.b})`;
-  t.fillRect(0, 0, tmp.width, tmp.height);
+  t.fillRect(0, 0, w, h);
   t.globalCompositeOperation = "source-over";
 
+  // Camada 2 (correção cirúrgica): preenche somente o vazio CENTRAL
+  // da gola com o degradê fixo preto -> cinza, sem alterar a geometria.
+  const source = document.createElement("canvas");
+  source.width = w;
+  source.height = h;
+  const sctx = source.getContext("2d", { willReadFrequently: true });
+  sctx.drawImage(img, 0, 0, w, h);
+  const data = sctx.getImageData(0, 0, w, h);
+  const d = data.data;
+
+  // Flood-fill a partir do centro para identificar apenas o buraco interno
+  // da gola. A área externa, também transparente, fica intocada.
+  const cx = Math.floor(w / 2);
+  const cy = Math.floor(h / 2);
+  const mask = new Uint8Array(w * h);
+  const queue = new Int32Array(w * h);
+  let qStart = 0, qEnd = 0;
+  const start = cy * w + cx;
+  if (d[start * 4 + 3] < 160) {
+    queue[qEnd++] = start;
+    mask[start] = 255;
+  }
+
+  while (qStart < qEnd) {
+    const idx = queue[qStart++];
+    const x = idx % w;
+    const y = Math.floor(idx / w);
+    const neighbors = [idx - 1, idx + 1, idx - w, idx + w];
+    if (x === 0) neighbors[0] = -1;
+    if (x === w - 1) neighbors[1] = -1;
+    if (y === 0) neighbors[2] = -1;
+    if (y === h - 1) neighbors[3] = -1;
+
+    for (const n of neighbors) {
+      if (n < 0 || mask[n]) continue;
+      if (d[n * 4 + 3] < 160) {
+        mask[n] = 255;
+        queue[qEnd++] = n;
+      }
+    }
+  }
+
+  const gradientLayer = document.createElement("canvas");
+  gradientLayer.width = w;
+  gradientLayer.height = h;
+  const gctx = gradientLayer.getContext("2d");
+  const grad = gctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#111111");
+  grad.addColorStop(0.52, "#707070");
+  grad.addColorStop(1, "#c8c8c8");
+  gctx.fillStyle = grad;
+  gctx.fillRect(0, 0, w, h);
+
+  const gm = gctx.getImageData(0, 0, w, h);
+  for (let i = 0; i < mask.length; i++) gm.data[i * 4 + 3] = mask[i];
+  gctx.putImageData(gm, 0, 0);
+
+  // Primeiro o centro preenchido; depois a gola editável por cima.
+  ctx.drawImage(gradientLayer, pos.x, pos.y, pos.w, pos.h);
   ctx.drawImage(tmp, pos.x, pos.y, pos.w, pos.h);
 }
 
