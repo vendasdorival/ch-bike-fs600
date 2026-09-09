@@ -404,6 +404,27 @@ function render() {
   ctx.putImageData(im,0,0);
 
   drawActiveCollar();
+  applyShirtShadow();
+}
+
+// ACABAMENTO PREMIUM — sombra suave ao redor de toda a camisa.
+// É aplicada somente depois da camisa e da gola estarem prontas,
+// portanto não altera geometria, preenchimentos, recortes ou comandos.
+function applyShirtShadow() {
+  const finalLayer = document.createElement("canvas");
+  finalLayer.width = canvas.width;
+  finalLayer.height = canvas.height;
+  const fctx = finalLayer.getContext("2d");
+  fctx.drawImage(canvas, 0, 0);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.42)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 12;
+  ctx.drawImage(finalLayer, 0, 0);
+  ctx.restore();
 }
 
 function drawActiveCollar() {
