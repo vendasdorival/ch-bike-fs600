@@ -146,10 +146,11 @@ const COLLAR_DATA = {
   sejam feitas aqui sem alterar corpo, mangas ou a lógica de cores.
 */
 const COLLAR_LAYOUT = {
-  // Dimensão aprovada mantida. Ajuste final: 1 mm mais baixa.
-  madrid:  { x:384.8, y:13.6, w:274.0, h:172.2 },
-  redonda: { x:390.1, y:15.6, w:260.7, h:163.7 },
-  v:       { x:382.7, y:15.6, w:273.4, h:164.4 }
+  // Posição aprovada: 0,5 mm para a esquerda e 1 mm para baixo.
+  // A geometria e as dimensões de cada gola permanecem inalteradas.
+  madrid:  { x:382.9, y:17.4, w:274.0, h:172.2 },
+  redonda: { x:388.2, y:19.4, w:260.7, h:163.7 },
+  v:       { x:380.8, y:19.4, w:273.4, h:164.4 }
 };
 
 const collarImages = {};
@@ -400,247 +401,148 @@ function render() {
     p[i+3] = sa;
   }
 
+  // ACABAMENTO FINO V1 — atua SOMENTE sobre a aparência dos pixels já renderizados.
+  // Não altera geometria, classificação das regiões, comandos, golas ou recortes.
+  applyFineFabricFinish(im);
+
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.putImageData(im,0,0);
 
   drawActiveCollar();
-
-  // REALISMO ESTRUTURAL:
-  // mantém exatamente a geometria atual e acrescenta somente luz/sombra.
-  // Não desenha linhas de contorno.
-  applyRealisticShading();
-
   applyShirtShadow();
 }
 
-// Cache da sombra suave das emendas existentes no molde original.
-let seamShadowCache = null;
+// ACABAMENTO FINO DO TECIDO
+// 1) sombreia progressivamente a partir das bordas reais da peça;
+// 2) acrescenta poucas dobras suaves nas axilas/laterais/barra;
+// 3) mantém o centro do peito e abdômen limpo para futuros patrocinadores.
+// IMPORTANTE: não cria nem modifica qualquer path/recorte da camisa.
+function applyFineFabricFinish(imageData) {
+  const d = imageData.data;
+  const W = canvas.width, H = canvas.height;
 
-function buildSeamShadowCache() {
-  const w = canvas.width;
-  const h = canvas.height;
+  // Limites reais ocupados pela camisa em cada linha/coluna.
+  // São usados apenas como referência de DISTÂNCIA para o sombreado;
+  // nenhum pixel transparente é preenchido por esta função.
+  const left = new Int32Array(H);
+  const right = new Int32Array(H);
+  left.fill(W); right.fill(-1);
+  const top = new Int32Array(W);
+  const bottom = new Int32Array(W);
+  top.fill(H); bottom.fill(-1);
 
-  const seam = document.createElement("canvas");
-  seam.width = w;
-  seam.height = h;
-  const sctx = seam.getContext("2d", { willReadFrequently:true });
-  const data = sctx.createImageData(w, h);
-  const d = data.data;
-
-  // Detecta apenas transições reais entre as regiões já existentes
-  // no arquivo-base. Isso preserva a construção original do projeto.
-  for (let y = 2; y < h - 2; y++) {
-    for (let x = 2; x < w - 2; x++) {
-      const idx = (y * w + x) * 4;
-      const a = originalPixels[idx + 3];
-      if (a < 40) continue;
-
-      const here = classify(
-        originalPixels[idx],
-        originalPixels[idx + 1],
-        originalPixels[idx + 2]
-      );
-      if (!here) continue;
-
-      let boundary = false;
-      const offsets = [-2, 2, -2*w, 2*w];
-
-      for (const off of offsets) {
-        const ni = idx + off * 4;
-        if (ni < 0 || ni >= originalPixels.length) continue;
-
-        const other = classify(
-          originalPixels[ni],
-          originalPixels[ni + 1],
-          originalPixels[ni + 2]
-        );
-
-        // Só interessa emenda entre duas áreas editáveis diferentes.
-        // O contorno externo não é desenhado aqui.
-        if (other && other !== here) {
-          boundary = true;
-          break;
-        }
-      }
-
-      if (boundary) {
-        d[idx] = 0;
-        d[idx + 1] = 0;
-        d[idx + 2] = 0;
-        d[idx + 3] = 105;
-      }
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = d[(y * W + x) * 4 + 3];
+      if (a < 8) continue;
+      if (x < left[y]) left[y] = x;
+      if (x > right[y]) right[y] = x;
+      if (y < top[x]) top[x] = y;
+      if (y > bottom[x]) bottom[x] = y;
     }
   }
 
-  sctx.putImageData(data, 0, 0);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const smooth01 = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
-  const blurred = document.createElement("canvas");
-  blurred.width = w;
-  blurred.height = h;
-  const bctx = blurred.getContext("2d");
-  bctx.filter = "blur(7px)";
-  bctx.drawImage(seam, 0, 0);
-  bctx.filter = "none";
-
-  seamShadowCache = blurred;
-}
-
-function applyRealisticShading() {
-  const w = canvas.width;
-  const h = canvas.height;
-  if (!w || !h) return;
-
-  // Fotografia atual da camisa já recolorida e com a gola ativa.
-  const base = document.createElement("canvas");
-  base.width = w;
-  base.height = h;
-  const bctx = base.getContext("2d");
-  bctx.drawImage(canvas, 0, 0);
-
-  // Máscara baseada exclusivamente na geometria visível atual.
-  const mask = document.createElement("canvas");
-  mask.width = w;
-  mask.height = h;
-  const mctx = mask.getContext("2d");
-  mctx.drawImage(base, 0, 0);
-  mctx.globalCompositeOperation = "source-in";
-  mctx.fillStyle = "#ffffff";
-  mctx.fillRect(0, 0, w, h);
-  mctx.globalCompositeOperation = "source-over";
-
-  // ============================================================
-  // 1) SOMBRA DAS BORDAS PARA DENTRO
-  // Cria um "negativo" da camisa, desfoca e mostra somente
-  // a parte que invade suavemente a silhueta.
-  // Nenhuma linha é desenhada.
-  // ============================================================
-  const outside = document.createElement("canvas");
-  outside.width = w;
-  outside.height = h;
-  const octx = outside.getContext("2d");
-  octx.fillStyle = "#000";
-  octx.fillRect(0, 0, w, h);
-  octx.globalCompositeOperation = "destination-out";
-  octx.drawImage(mask, 0, 0);
-  octx.globalCompositeOperation = "source-over";
-
-  const inner = document.createElement("canvas");
-  inner.width = w;
-  inner.height = h;
-  const ictx = inner.getContext("2d");
-  ictx.filter = "blur(24px)";
-  ictx.drawImage(outside, 0, 0);
-  ictx.filter = "none";
-  ictx.globalCompositeOperation = "destination-in";
-  ictx.drawImage(mask, 0, 0);
-  ictx.globalCompositeOperation = "source-over";
-
-  // Segunda faixa, mais curta, dá definição sem criar contorno.
-  const innerFine = document.createElement("canvas");
-  innerFine.width = w;
-  innerFine.height = h;
-  const ifctx = innerFine.getContext("2d");
-  ifctx.filter = "blur(11px)";
-  ifctx.drawImage(outside, 0, 0);
-  ifctx.filter = "none";
-  ifctx.globalCompositeOperation = "destination-in";
-  ifctx.drawImage(mask, 0, 0);
-  ifctx.globalCompositeOperation = "source-over";
-
-  // ============================================================
-  // 2) SOMBRAS NAS EMENDAS DO PRÓPRIO MOLDE
-  // Detectadas da imagem-base; viram sombra difusa, não linha.
-  // ============================================================
-  if (!seamShadowCache) buildSeamShadowCache();
-
-  // ============================================================
-  // 3) DOBRAS DISCRETAS NA PARTE INFERIOR
-  // São apenas luz/sombra translúcida, recortadas pela camisa.
-  // ============================================================
-  const foldsShadow = document.createElement("canvas");
-  foldsShadow.width = w;
-  foldsShadow.height = h;
-  const fs = foldsShadow.getContext("2d");
-
-  const sx = w / 1060;
-  const sy = h / 1008;
-
-  fs.lineCap = "round";
-  fs.lineJoin = "round";
-  fs.strokeStyle = "rgba(0,0,0,0.50)";
-  fs.lineWidth = 16 * sx;
-  fs.filter = `blur(${10 * sx}px)`;
-
-  const shadowPaths = [
-    [355, 955, 380, 900, 392, 830],
-    [470, 982, 485, 925, 490, 855],
-    [590, 982, 575, 925, 570, 850],
-    [705, 955, 680, 900, 666, 830]
-  ];
-
-  for (const [x1,y1,cx,cy,x2,y2] of shadowPaths) {
-    fs.beginPath();
-    fs.moveTo(x1*sx, y1*sy);
-    fs.quadraticCurveTo(cx*sx, cy*sy, x2*sx, y2*sy);
-    fs.stroke();
-  }
-  fs.filter = "none";
-
-  const foldsLight = document.createElement("canvas");
-  foldsLight.width = w;
-  foldsLight.height = h;
-  const fl = foldsLight.getContext("2d");
-  fl.lineCap = "round";
-  fl.strokeStyle = "rgba(255,255,255,0.65)";
-  fl.lineWidth = 11 * sx;
-  fl.filter = `blur(${9 * sx}px)`;
-
-  const lightPaths = [
-    [376, 958, 398, 906, 408, 842],
-    [488, 980, 500, 930, 505, 866],
-    [572, 980, 560, 930, 555, 862],
-    [684, 958, 662, 906, 652, 842]
-  ];
-
-  for (const [x1,y1,cx,cy,x2,y2] of lightPaths) {
-    fl.beginPath();
-    fl.moveTo(x1*sx, y1*sy);
-    fl.quadraticCurveTo(cx*sx, cy*sy, x2*sx, y2*sy);
-    fl.stroke();
-  }
-  fl.filter = "none";
-
-  // ============================================================
-  // COMPOSIÇÃO FINAL
-  // source-atop impede qualquer efeito de ultrapassar a geometria.
-  // multiply/screen trabalham sobre a cor escolhida, sem substituí-la.
-  // ============================================================
-  ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(base, 0, 0);
-
-  ctx.save();
-  ctx.globalCompositeOperation = "source-atop";
-
-  ctx.globalAlpha = 0.24;
-  ctx.globalCompositeOperation = "multiply";
-  ctx.drawImage(inner, 0, 0);
-
-  ctx.globalAlpha = 0.09;
-  ctx.drawImage(innerFine, 0, 0);
-
-  if (seamShadowCache) {
-    ctx.globalAlpha = 0.14;
-    ctx.drawImage(seamShadowCache, 0, 0);
+  // Faixa de dobra orientada: sombra + filete de luz deslocado.
+  // O resultado é volume sem desenhar uma linha visível.
+  function foldPair(x, y, cx, cy, angle, length, width, strength) {
+    const ca = Math.cos(angle), sa = Math.sin(angle);
+    const dx = x - cx, dy = y - cy;
+    const u =  dx * ca + dy * sa;
+    const v = -dx * sa + dy * ca;
+    const along = Math.exp(-(u * u) / (2 * length * length));
+    const shadow = Math.exp(-(v * v) / (2 * width * width)) * along;
+    const lightOffset = width * 1.55;
+    const light = Math.exp(-((v - lightOffset) * (v - lightOffset)) / (2 * (width * 1.15) * (width * 1.15))) * along;
+    return { dark: shadow * strength, light: light * strength * 0.48 };
   }
 
-  ctx.globalAlpha = 0.11;
-  ctx.drawImage(foldsShadow, 0, 0);
+  for (let y = 0; y < H; y++) {
+    if (right[y] < 0) continue;
+    for (let x = left[y]; x <= right[y]; x++) {
+      const i = (y * W + x) * 4;
+      if (d[i + 3] < 8) continue;
 
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = 0.08;
-  ctx.drawImage(foldsLight, 0, 0);
+      const nx = x / W, ny = y / H;
 
-  ctx.restore();
+      // -------- SOMBRA DAS BORDAS --------
+      // Laterais: mais marcada junto ao contorno e desaparecendo para o centro.
+      const dl = x - left[y];
+      const dr = right[y] - x;
+      const sideDist = Math.min(dl, dr);
+      let edgeDark = 0;
+
+      // O raio menor mantém o centro visualmente limpo.
+      if (sideDist < 92) {
+        const t = 1 - smooth01(sideDist / 92);
+        edgeDark += 0.235 * t;
+      }
+
+      // Ombros / parte superior externa. Evita a região central da gola.
+      if (ny < 0.29 && (nx < 0.35 || nx > 0.65) && top[x] < H) {
+        const dt = y - top[x];
+        if (dt >= 0 && dt < 64) {
+          const t = 1 - smooth01(dt / 64);
+          edgeDark += 0.115 * t;
+        }
+      }
+
+      // Barra: sombra curta e elegante de baixo para cima.
+      if (ny > 0.70 && bottom[x] >= 0) {
+        const db = bottom[x] - y;
+        if (db >= 0 && db < 46) {
+          const t = 1 - smooth01(db / 46);
+          edgeDark += 0.105 * t;
+        }
+      }
+
+      // -------- DOBRAS DISCRETAS --------
+      // Fora do centro nobre. Coordenadas são proporcionais ao canvas original.
+      let foldDark = 0, foldLight = 0;
+      const folds = [
+        // axilas
+        [0.305, 0.335, -0.68, 72, 10, 0.095],
+        [0.695, 0.335,  0.68, 72, 10, 0.095],
+        // laterais médias/inferiores
+        [0.318, 0.625, -0.46, 88, 13, 0.080],
+        [0.682, 0.625,  0.46, 88, 13, 0.080],
+        [0.330, 0.760, -0.30, 72, 12, 0.072],
+        [0.670, 0.760,  0.30, 72, 12, 0.072],
+        // barra — duas ondulações suaves e curtas
+        [0.405, 0.842, -0.10, 78, 13, 0.055],
+        [0.595, 0.842,  0.10, 78, 13, 0.055]
+      ];
+
+      // Área central reservada: reduz fortemente qualquer dobra que tente entrar nela.
+      const centerProtected = (nx > 0.355 && nx < 0.645 && ny > 0.18 && ny < 0.76);
+      const foldScale = centerProtected ? 0.16 : 1.0;
+
+      for (const f of folds) {
+        const r = foldPair(x, y, f[0] * W, f[1] * H, f[2], f[3], f[4], f[5] * foldScale);
+        foldDark += r.dark;
+        foldLight += r.light;
+      }
+
+      // Combinação conservadora: preserva a cor escolhida.
+      const darkAmount = clamp(edgeDark + foldDark, 0, 0.31);
+      const lightAmount = clamp(foldLight, 0, 0.075);
+
+      let r = d[i] * (1 - darkAmount);
+      let g = d[i + 1] * (1 - darkAmount);
+      let b = d[i + 2] * (1 - darkAmount);
+
+      // Luz da dobra mistura levemente em direção ao branco, útil também em cores escuras.
+      r += (255 - r) * lightAmount;
+      g += (255 - g) * lightAmount;
+      b += (255 - b) * lightAmount;
+
+      d[i]     = Math.round(clamp(r, 0, 255));
+      d[i + 1] = Math.round(clamp(g, 0, 255));
+      d[i + 2] = Math.round(clamp(b, 0, 255));
+    }
+  }
 }
 
 // ACABAMENTO PREMIUM — sombra suave ao redor de toda a camisa.
@@ -672,7 +574,7 @@ function drawActiveCollar() {
   const w = Math.max(1, Math.round(pos.w));
   const h = Math.max(1, Math.round(pos.h));
 
-  // Camada 1: mantém a geometria externa da gola editável.
+  // Camada 1: mantém exatamente a geometria original de cada gola.
   const tmp = document.createElement("canvas");
   tmp.width = w;
   tmp.height = h;
@@ -683,8 +585,8 @@ function drawActiveCollar() {
   t.fillRect(0, 0, w, h);
   t.globalCompositeOperation = "source-over";
 
-  // Camada 2 (correção cirúrgica): preenche somente o vazio CENTRAL
-  // da gola com o degradê fixo preto -> cinza, sem alterar a geometria.
+  // Mapa alfa da imagem original da gola. É usado tanto para o fundo interno
+  // quanto para obter o contorno real da peça, sem inventar uma geometria nova.
   const source = document.createElement("canvas");
   source.width = w;
   source.height = h;
@@ -693,8 +595,9 @@ function drawActiveCollar() {
   const data = sctx.getImageData(0, 0, w, h);
   const d = data.data;
 
-  // Flood-fill a partir do centro para identificar apenas o buraco interno
-  // da gola. A área externa, também transparente, fica intocada.
+  // Mantém o fundo interno que já funcionava nas golas Madrid e Redonda.
+  // Na Gola V há uma proteção adicional por faixa horizontal para impedir
+  // que o preenchimento transparente escape para fora e forme um retângulo.
   const cx = Math.floor(w / 2);
   const cy = Math.floor(h / 2);
   const mask = new Uint8Array(w * h);
@@ -725,6 +628,40 @@ function drawActiveCollar() {
     }
   }
 
+  if (activeCollar === "v") {
+    // AJUSTE CIRÚRGICO — SOMENTE GOLA V:
+    // a abertura da gola V é aberta visualmente no topo da imagem original.
+    // O flood-fill podia alcançar a área externa e criar uma pequena borda
+    // acima da camisa. Aqui reconstruímos APENAS o fundo interno da abertura:
+    // em cada coluna, ele só existe entre o primeiro e o último pixel opaco
+    // da própria gola. Nada acima da borda superior pode ser desenhado.
+    mask.fill(0);
+    for (let x = 0; x < w; x++) {
+      let top = -1, bottom = -1;
+
+      for (let y = 0; y < h; y++) {
+        if (d[(y * w + x) * 4 + 3] >= 80) {
+          top = y;
+          break;
+        }
+      }
+      for (let y = h - 1; y >= 0; y--) {
+        if (d[(y * w + x) * 4 + 3] >= 80) {
+          bottom = y;
+          break;
+        }
+      }
+
+      if (top < 0 || bottom <= top + 1) continue;
+
+      for (let y = top + 1; y < bottom; y++) {
+        const idx = y * w + x;
+        // Fundo somente onde a imagem da gola é realmente transparente.
+        if (d[idx * 4 + 3] < 80) mask[idx] = 255;
+      }
+    }
+  }
+
   const gradientLayer = document.createElement("canvas");
   gradientLayer.width = w;
   gradientLayer.height = h;
@@ -740,9 +677,81 @@ function drawActiveCollar() {
   for (let i = 0; i < mask.length; i++) gm.data[i * 4 + 3] = mask[i];
   gctx.putImageData(gm, 0, 0);
 
-  // Primeiro o centro preenchido; depois a gola editável por cima.
+  // Fundo primeiro, gola por cima: exatamente como na versão estável.
   ctx.drawImage(gradientLayer, pos.x, pos.y, pos.w, pos.h);
   ctx.drawImage(tmp, pos.x, pos.y, pos.w, pos.h);
+
+  // Uma única costura branca, fixa, acompanhando o CONTORNO EXTERNO/INFERIOR
+  // real de cada gola. Como o caminho nasce do alfa da própria imagem,
+  // Madrid, Redonda e V recebem geometrias diferentes automaticamente.
+  drawCollarOuterStitching(data, pos, w, h);
+}
+
+function drawCollarOuterStitching(imageData, pos, w, h) {
+  const d = imageData.data;
+  const raw = [];
+
+  // Em cada coluna, pega o último pixel realmente pertencente à gola.
+  // Isso corresponde ao contorno da gola voltado para o corpo da camisa.
+  for (let x = 0; x < w; x++) {
+    let bottom = -1;
+    for (let y = h - 1; y >= 0; y--) {
+      if (d[(y * w + x) * 4 + 3] >= 100) {
+        bottom = y;
+        break;
+      }
+    }
+    if (bottom >= 0) raw.push({ x, y: bottom });
+  }
+
+  if (raw.length < 8) return;
+
+  // Mantém apenas o trecho principal contínuo da borda; pequenos resíduos
+  // nas extremidades não entram na costura.
+  let best = [], current = [raw[0]];
+  for (let i = 1; i < raw.length; i++) {
+    if (raw[i].x - raw[i - 1].x <= 2 && Math.abs(raw[i].y - raw[i - 1].y) <= 12) {
+      current.push(raw[i]);
+    } else {
+      if (current.length > best.length) best = current;
+      current = [raw[i]];
+    }
+  }
+  if (current.length > best.length) best = current;
+  if (best.length < 8) best = raw;
+
+  // Suavização leve, sem deslocar a geometria original.
+  const points = [];
+  const radius = 3;
+  for (let i = 0; i < best.length; i += 2) {
+    let sy = 0, count = 0;
+    for (let j = Math.max(0, i - radius); j <= Math.min(best.length - 1, i + radius); j++) {
+      sy += best[j].y;
+      count++;
+    }
+    points.push({ x: best[i].x, y: sy / count });
+  }
+  if (points.length < 4) return;
+
+  ctx.save();
+  ctx.strokeStyle = "#ffffff";     // cor estática, nunca acompanha o seletor
+  ctx.lineWidth = 1.75;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.setLineDash([2.4, 2.8]);
+  ctx.beginPath();
+  ctx.moveTo(
+    pos.x + (points[0].x / w) * pos.w,
+    pos.y + (points[0].y / h) * pos.h - 1.4
+  );
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(
+      pos.x + (points[i].x / w) * pos.w,
+      pos.y + (points[i].y / h) * pos.h - 1.4
+    );
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 document.getElementById("apply").onclick=()=>applyCommand(cmd.value);
