@@ -401,13 +401,14 @@ function render() {
     p[i+3] = sa;
   }
 
-  // ACABAMENTO FINO V1 — atua SOMENTE sobre a aparência dos pixels já renderizados.
+  // ACABAMENTO FINO V2 — atua SOMENTE sobre a aparência dos pixels já renderizados.
   // Não altera geometria, classificação das regiões, comandos, golas ou recortes.
   applyFineFabricFinish(im);
 
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.putImageData(im,0,0);
 
+  applyCollarContactShadow();
   drawActiveCollar();
   applyShirtShadow();
 }
@@ -420,129 +421,112 @@ function render() {
 function applyFineFabricFinish(imageData) {
   const d = imageData.data;
   const W = canvas.width, H = canvas.height;
-
-  // Limites reais ocupados pela camisa em cada linha/coluna.
-  // São usados apenas como referência de DISTÂNCIA para o sombreado;
-  // nenhum pixel transparente é preenchido por esta função.
-  const left = new Int32Array(H);
-  const right = new Int32Array(H);
+  const left = new Int32Array(H), right = new Int32Array(H);
   left.fill(W); right.fill(-1);
-  const top = new Int32Array(W);
-  const bottom = new Int32Array(W);
+  const top = new Int32Array(W), bottom = new Int32Array(W);
   top.fill(H); bottom.fill(-1);
 
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const a = d[(y * W + x) * 4 + 3];
-      if (a < 8) continue;
-      if (x < left[y]) left[y] = x;
-      if (x > right[y]) right[y] = x;
-      if (y < top[x]) top[x] = y;
-      if (y > bottom[x]) bottom[x] = y;
-    }
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
+    const a=d[(y*W+x)*4+3];
+    if (a<8) continue;
+    if (x<left[y]) left[y]=x; if (x>right[y]) right[y]=x;
+    if (y<top[x]) top[x]=y; if (y>bottom[x]) bottom[x]=y;
   }
 
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const smooth01 = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const gauss=(v,s)=>Math.exp(-(v*v)/(2*s*s));
 
-  // Faixa de dobra orientada: sombra + filete de luz deslocado.
-  // O resultado é volume sem desenhar uma linha visível.
-  function foldPair(x, y, cx, cy, angle, length, width, strength) {
-    const ca = Math.cos(angle), sa = Math.sin(angle);
-    const dx = x - cx, dy = y - cy;
-    const u =  dx * ca + dy * sa;
-    const v = -dx * sa + dy * ca;
-    const along = Math.exp(-(u * u) / (2 * length * length));
-    const shadow = Math.exp(-(v * v) / (2 * width * width)) * along;
-    const lightOffset = width * 1.55;
-    const light = Math.exp(-((v - lightOffset) * (v - lightOffset)) / (2 * (width * 1.15) * (width * 1.15))) * along;
-    return { dark: shadow * strength, light: light * strength * 0.48 };
+  // Volume orgânico: uma sombra larga + uma luz deslocada. Não desenha linhas.
+  function volumePair(x,y,cx,cy,angle,len,wid,dark,light,offset=1.45){
+    const ca=Math.cos(angle), sa=Math.sin(angle);
+    const dx=x-cx, dy=y-cy;
+    const u=dx*ca+dy*sa, v=-dx*sa+dy*ca;
+    const along=gauss(u,len);
+    return {
+      dark: gauss(v,wid)*along*dark,
+      light: gauss(v-wid*offset,wid*1.55)*along*light
+    };
   }
 
-  for (let y = 0; y < H; y++) {
-    if (right[y] < 0) continue;
-    for (let x = left[y]; x <= right[y]; x++) {
-      const i = (y * W + x) * 4;
-      if (d[i + 3] < 8) continue;
+  for (let y=0; y<H; y++) {
+    if (right[y]<0) continue;
+    for (let x=left[y]; x<=right[y]; x++) {
+      const i=(y*W+x)*4;
+      if (d[i+3]<8) continue;
+      const nx=x/W, ny=y/H;
+      const dl=x-left[y], dr=right[y]-x, side=Math.min(dl,dr);
+      let dark=0, light=0;
 
-      const nx = x / W, ny = y / H;
+      // BORDA LATERAL V2: queda exponencial longa. Não há ponto de corte visível.
+      // Forte somente encostado no contorno e muito suave por uma faixa ampla.
+      dark += 0.16*Math.exp(-side/23) + 0.075*Math.exp(-side/92);
 
-      // -------- SOMBRA DAS BORDAS --------
-      // Laterais: mais marcada junto ao contorno e desaparecendo para o centro.
-      const dl = x - left[y];
-      const dr = right[y] - x;
-      const sideDist = Math.min(dl, dr);
-      let edgeDark = 0;
-
-      // O raio menor mantém o centro visualmente limpo.
-      if (sideDist < 92) {
-        const t = 1 - smooth01(sideDist / 92);
-        edgeDark += 0.235 * t;
+      // Ombros: modelagem curta acompanhando o topo, sem arco circular no peitoral.
+      if (ny<0.30 && (nx<0.39 || nx>0.61) && top[x]<H) {
+        const dt=y-top[x];
+        if (dt>=0) dark += 0.075*Math.exp(-dt/30);
       }
 
-      // Ombros / parte superior externa. Evita a região central da gola.
-      if (ny < 0.29 && (nx < 0.35 || nx > 0.65) && top[x] < H) {
-        const dt = y - top[x];
-        if (dt >= 0 && dt < 64) {
-          const t = 1 - smooth01(dt / 64);
-          edgeDark += 0.115 * t;
+      // Barra: espessura/curvatura muito discreta, também sem corte rígido.
+      if (bottom[x]>=0 && ny>0.70) {
+        const db=bottom[x]-y;
+        if (db>=0) {
+          dark += 0.055*Math.exp(-db/18);
+          light += 0.018*gauss(db-26,18);
         }
       }
 
-      // Barra: sombra curta e elegante de baixo para cima.
-      if (ny > 0.70 && bottom[x] >= 0) {
-        const db = bottom[x] - y;
-        if (db >= 0 && db < 46) {
-          const t = 1 - smooth01(db / 46);
-          edgeDark += 0.105 * t;
-        }
-      }
-
-      // -------- DOBRAS DISCRETAS --------
-      // Fora do centro nobre. Coordenadas são proporcionais ao canvas original.
-      let foldDark = 0, foldLight = 0;
-      const folds = [
-        // axilas
-        [0.305, 0.335, -0.68, 72, 10, 0.095],
-        [0.695, 0.335,  0.68, 72, 10, 0.095],
-        // laterais médias/inferiores
-        [0.318, 0.625, -0.46, 88, 13, 0.080],
-        [0.682, 0.625,  0.46, 88, 13, 0.080],
-        [0.330, 0.760, -0.30, 72, 12, 0.072],
-        [0.670, 0.760,  0.30, 72, 12, 0.072],
-        // barra — duas ondulações suaves e curtas
-        [0.405, 0.842, -0.10, 78, 13, 0.055],
-        [0.595, 0.842,  0.10, 78, 13, 0.055]
+      // VOLUMES DE TECIDO — poucos, longos e orgânicos.
+      // Axilas: tensão nasce da emenda e se dissolve no corpo.
+      const vols=[
+        [0.292,0.330,-0.73,95,17,0.070,0.024],
+        [0.708,0.330, 0.73,95,17,0.070,0.024],
+        // Laterais verticais, inspiradas na referência enviada; centro fica livre.
+        [0.342,0.585,-0.12,180,24,0.040,0.016],
+        [0.658,0.585, 0.12,180,24,0.040,0.016],
+        [0.365,0.770,-0.22,125,26,0.027,0.012],
+        [0.635,0.770, 0.22,125,26,0.027,0.012]
       ];
-
-      // Área central reservada: reduz fortemente qualquer dobra que tente entrar nela.
-      const centerProtected = (nx > 0.355 && nx < 0.645 && ny > 0.18 && ny < 0.76);
-      const foldScale = centerProtected ? 0.16 : 1.0;
-
-      for (const f of folds) {
-        const r = foldPair(x, y, f[0] * W, f[1] * H, f[2], f[3], f[4], f[5] * foldScale);
-        foldDark += r.dark;
-        foldLight += r.light;
+      const protectedCenter=(nx>0.39 && nx<0.61 && ny>0.18 && ny<0.78);
+      const scale=protectedCenter?0.10:1;
+      for (const v of vols) {
+        const q=volumePair(x,y,v[0]*W,v[1]*H,v[2],v[3],v[4],v[5]*scale,v[6]*scale);
+        dark+=q.dark; light+=q.light;
       }
 
-      // Combinação conservadora: preserva a cor escolhida.
-      const darkAmount = clamp(edgeDark + foldDark, 0, 0.31);
-      const lightAmount = clamp(foldLight, 0, 0.075);
+      // Suaviza ainda mais qualquer efeito no centro nobre do peito.
+      if (nx>0.36 && nx<0.64 && ny>0.20 && ny<0.58) {
+        const centerFade=clamp((Math.abs(nx-0.5)-0.04)/0.10,0,1);
+        dark*=0.42+0.58*centerFade;
+        light*=0.45+0.55*centerFade;
+      }
 
-      let r = d[i] * (1 - darkAmount);
-      let g = d[i + 1] * (1 - darkAmount);
-      let b = d[i + 2] * (1 - darkAmount);
-
-      // Luz da dobra mistura levemente em direção ao branco, útil também em cores escuras.
-      r += (255 - r) * lightAmount;
-      g += (255 - g) * lightAmount;
-      b += (255 - b) * lightAmount;
-
-      d[i]     = Math.round(clamp(r, 0, 255));
-      d[i + 1] = Math.round(clamp(g, 0, 255));
-      d[i + 2] = Math.round(clamp(b, 0, 255));
+      dark=clamp(dark,0,0.245); light=clamp(light,0,0.045);
+      let r=d[i]*(1-dark), g=d[i+1]*(1-dark), b=d[i+2]*(1-dark);
+      r+=(255-r)*light; g+=(255-g)*light; b+=(255-b)*light;
+      d[i]=Math.round(clamp(r,0,255)); d[i+1]=Math.round(clamp(g,0,255)); d[i+2]=Math.round(clamp(b,0,255));
     }
   }
+}
+
+// Sombra de contato da gola: usa a própria imagem da gola somente como fonte de alfa.
+// É desenhada ANTES da gola, portanto não altera geometria, cor ou costura.
+function applyCollarContactShadow() {
+  if (!activeCollar || !collarImages[activeCollar]) return;
+  const img=collarImages[activeCollar], pos=COLLAR_LAYOUT[activeCollar];
+  const w=Math.max(1,Math.round(pos.w)), h=Math.max(1,Math.round(pos.h));
+  const sh=document.createElement("canvas"); sh.width=w; sh.height=h;
+  const s=sh.getContext("2d");
+  s.drawImage(img,0,0,w,h);
+  s.globalCompositeOperation="source-in";
+  s.fillStyle="rgba(0,0,0,0.34)";
+  s.fillRect(0,0,w,h);
+  s.globalCompositeOperation="source-over";
+  ctx.save();
+  ctx.globalAlpha=0.42;
+  ctx.filter="blur(4px)";
+  ctx.drawImage(sh,pos.x,pos.y+5,pos.w,pos.h);
+  ctx.restore();
 }
 
 // ACABAMENTO PREMIUM — sombra suave ao redor de toda a camisa.
