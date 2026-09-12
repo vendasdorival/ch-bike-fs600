@@ -598,6 +598,7 @@ function drawActiveCollar() {
 
 function drawCollarStitching(type, pos) {
   const x = pos.x, y = pos.y, w = pos.w, h = pos.h;
+
   ctx.save();
   ctx.strokeStyle = "rgba(255,255,255,0.96)";
   ctx.lineWidth = 2.35;
@@ -605,49 +606,52 @@ function drawCollarStitching(type, pos) {
   ctx.lineJoin = "round";
   ctx.setLineDash([6, 5]);
 
+  // REGRA: o pontilhado usa exatamente a MESMA largura da gola.
+  // Não aumenta nem reduz lateralmente em relação ao box da própria gola.
+  const left = x + 1;
+  const right = x + w - 1;
+  const centerX = x + w * 0.50;
+
   if (type === "v") {
-    // Linha pontilhada acompanhando a BORDA EXTERNA da gola V.
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.18, y + h * 0.15);
+    ctx.moveTo(left, y + h * 0.13);
     ctx.bezierCurveTo(
-      x + w * 0.25, y + h * 0.43,
-      x + w * 0.36, y + h * 0.76,
-      x + w * 0.50, y + h * 0.98
+      x + w * 0.18, y + h * 0.42,
+      x + w * 0.34, y + h * 0.78,
+      centerX, y + h - 1
     );
     ctx.bezierCurveTo(
-      x + w * 0.64, y + h * 0.76,
-      x + w * 0.75, y + h * 0.43,
-      x + w * 0.82, y + h * 0.15
+      x + w * 0.66, y + h * 0.78,
+      x + w * 0.82, y + h * 0.42,
+      right, y + h * 0.13
     );
     ctx.stroke();
 
   } else if (type === "redonda") {
-    // Linha pontilhada acompanhando a BORDA EXTERNA inferior da gola redonda.
     ctx.beginPath();
     ctx.ellipse(
-      x + w * 0.50,
+      centerX,
       y + h * 0.50,
-      w * 0.39,
-      h * 0.46,
+      (w / 2) - 1,
+      (h / 2) - 1,
       0,
-      Math.PI * 0.07,
-      Math.PI * 0.93
+      Math.PI * 0.06,
+      Math.PI * 0.94
     );
     ctx.stroke();
 
   } else if (type === "madrid") {
-    // Linha pontilhada acompanhando a BORDA EXTERNA da gola Madrid.
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.17, y + h * 0.16);
+    ctx.moveTo(left, y + h * 0.14);
     ctx.bezierCurveTo(
-      x + w * 0.23, y + h * 0.46,
-      x + w * 0.35, y + h * 0.80,
-      x + w * 0.50, y + h * 0.94
+      x + w * 0.16, y + h * 0.45,
+      x + w * 0.34, y + h * 0.80,
+      centerX, y + h - 1
     );
     ctx.bezierCurveTo(
-      x + w * 0.65, y + h * 0.80,
-      x + w * 0.77, y + h * 0.46,
-      x + w * 0.83, y + h * 0.16
+      x + w * 0.66, y + h * 0.80,
+      x + w * 0.84, y + h * 0.45,
+      right, y + h * 0.14
     );
     ctx.stroke();
   }
