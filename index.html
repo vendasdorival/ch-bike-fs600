@@ -547,9 +547,7 @@ function drawActiveCollar() {
   const w = Math.max(1, Math.round(pos.w));
   const h = Math.max(1, Math.round(pos.h));
 
-  // Usa a própria imagem ORIGINAL da gola como geometria.
-  // O degradê interno original preto -> cinza é preservado exatamente
-  // na abertura real de cada uma das 3 golas.
+  // Base da gola usando a imagem ORIGINAL como geometria.
   const tmp = document.createElement("canvas");
   tmp.width = w;
   tmp.height = h;
@@ -559,6 +557,16 @@ function drawActiveCollar() {
   const imageData = t.getImageData(0, 0, w, h);
   const p = imageData.data;
 
+  // Cria uma máscara da ABERTURA INTERNA real da gola:
+  // regiões escuras/cinzas da imagem original definem exatamente
+  // o espaço interno a ser preenchido.
+  const innerMask = document.createElement("canvas");
+  innerMask.width = w;
+  innerMask.height = h;
+  const imctx = innerMask.getContext("2d");
+  const maskData = imctx.createImageData(w, h);
+  const mp = maskData.data;
+
   for (let i = 0; i < p.length; i += 4) {
     const a = p[i+3];
     if (a === 0) continue;
@@ -567,28 +575,53 @@ function drawActiveCollar() {
     const g = p[i+1];
     const b = p[i+2];
 
-    // A parte clara/branca da imagem é o TECIDO da gola.
-    // Somente ela recebe a cor escolhida.
-    // A região escura/cinza interna permanece intacta,
-    // conservando o degradê e a geometria originais.
     const brightness = (r + g + b) / 3;
     const chroma = Math.max(r,g,b) - Math.min(r,g,b);
 
+    // Tecido claro/branco da gola recebe a cor escolhida.
     if (brightness >= 178 && chroma <= 22) {
-      // Mantém suavemente o antialias das bordas.
       const strength = Math.min(1, Math.max(0, (brightness - 178) / 52));
       p[i]   = Math.round(r * (1-strength) + tint.r * strength);
       p[i+1] = Math.round(g * (1-strength) + tint.g * strength);
       p[i+2] = Math.round(b * (1-strength) + tint.b * strength);
     }
+    // Regiões cinza/escuras formam a abertura interna real.
+    else if (brightness < 178 && chroma <= 28) {
+      mp[i] = 255;
+      mp[i+1] = 255;
+      mp[i+2] = 255;
+      mp[i+3] = a;
+    }
   }
 
   t.putImageData(imageData, 0, 0);
+  imctx.putImageData(maskData, 0, 0);
 
-  // Desenha a gola completa já com o fundo interno original preservado.
+  // Preenchimento aprovado: degradê cinza 60% -> cinza 20%.
+  // Em RGB aproximado: 60% preto = #666666 / 20% preto = #CCCCCC.
+  const fill = document.createElement("canvas");
+  fill.width = w;
+  fill.height = h;
+  const fctx = fill.getContext("2d");
+
+  const grad = fctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0.00, "#666666");
+  grad.addColorStop(1.00, "#CCCCCC");
+  fctx.fillStyle = grad;
+  fctx.fillRect(0, 0, w, h);
+
+  // Faz o degradê ocupar SOMENTE a geometria interna real da gola.
+  fctx.globalCompositeOperation = "destination-in";
+  fctx.drawImage(innerMask, 0, 0);
+  fctx.globalCompositeOperation = "source-over";
+
+  // Ordem correta:
+  // 1) fundo interno
+  // 2) gola original colorida
+  // 3) pontilhado já aprovado (função permanece intocada)
+  ctx.drawImage(fill, pos.x, pos.y, pos.w, pos.h);
   ctx.drawImage(tmp, pos.x, pos.y, pos.w, pos.h);
 
-  // Pontilhado acompanha a borda externa REAL da imagem da gola.
   drawCollarStitching(activeCollar, pos, img);
 }
 
