@@ -100,9 +100,9 @@ function drawContain(ctx,img,color,pad=.02){const w=ctx.canvas.width,h=ctx.canva
   ctx.save(); ctx.shadowColor='rgba(17,24,39,.24)'; ctx.shadowBlur=Math.max(10,w*.018); ctx.shadowOffsetX=0; ctx.shadowOffsetY=Math.max(3,h*.006); ctx.drawImage(src,x,y,dw,dh); ctx.restore();
   return {x,y,w:dw,h:dh,scale};}
 function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canvas.height, src=tintedCanvas(img,color); const front=view==='front';
-  // A peça enviada corresponde ao lado esquerdo visual; o lado direito é o espelhamento horizontal.
+  // Ajuste V4: mantém a referência lateral e rebaixa as mangas para alinhar a junção manga/corpo do mapa-base.
   const dw=W*(front?0.205:0.210), dh=dw*(src.height/src.width);
-  const y=H*(front?0.128:0.128);
+  const y=H*(front?0.162:0.162);
   const x= side==='right' ? W*(front?0.739:0.734) : W*(front?0.056:0.052);
   ctx.save();
   ctx.translate(x+dw/2,y+dh/2);
@@ -111,8 +111,8 @@ function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canv
   ctx.restore();
 }
 function drawCollar(ctx,type,color){if(state.view==='back') return; const img=imgs[type],src=tintedCanvas(img,color); const W=ctx.canvas.width,H=ctx.canvas.height; let wFrac,yFrac;
- // Redução uniforme de 5% em relação ao ajuste anterior e descida fina de ~1 mm visual.
- if(type==='round'){wFrac=.2717;yFrac=.067}else if(type==='madrid'){wFrac=.2717;yFrac=.065}else{wFrac=.2698;yFrac=.066}
+ // Ajuste V4: gola reduzida mais 10% proporcionalmente, centralizada e levemente rebaixada.
+ if(type==='round'){wFrac=.2445;yFrac=.073}else if(type==='madrid'){wFrac=.2445;yFrac=.071}else{wFrac=.2428;yFrac=.072}
  const dw=W*wFrac, dh=dw*(src.height/src.width), x=(W-dw)/2, y=H*yFrac; ctx.drawImage(src,x,y,dw,dh);
 }
 function render(){if(!imgs.front.complete) return; for(const c of Object.values(cvs)){c.getContext('2d').clearRect(0,0,c.width,c.height)}; const baseImg=state.view==='front'?imgs.front:imgs.back; drawContain(cvs.base.getContext('2d'),baseImg,state.body,.025); if(state.sleevesActive){drawSleeve(cvs.sleeves.getContext('2d'),imgs.sleeve,state.sleeves,'left',state.view); drawSleeve(cvs.sleeves.getContext('2d'),imgs.sleeve,state.sleeves,'right',state.view);} if(state.collarActive && state.view==='front'){drawCollar(cvs.collar.getContext('2d'),state.collarType,state.collar);} updateUI();}
