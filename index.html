@@ -95,21 +95,24 @@ function fitCanvases(){const r=document.getElementById('stage').getBoundingClien
 function hexToRgb(hex){hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(x=>x+x).join(''); return [parseInt(hex.slice(0,2),16),parseInt(hex.slice(2,4),16),parseInt(hex.slice(4,6),16)];}
 const cache=new Map();
 function tintedCanvas(img,color){const key=img.src.slice(-48)+'|'+color+'|fx2'; if(cache.has(key)) return cache.get(key); const c=document.createElement('canvas'); c.width=img.naturalWidth;c.height=img.naturalHeight; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(img,0,0); const d=x.getImageData(0,0,c.width,c.height), p=d.data,[tr,tg,tb]=hexToRgb(color); const white=color.toLowerCase()==='#ffffff'; for(let i=0;i<p.length;i+=4){if(p[i+3]<4) continue; const r=p[i],g=p[i+1],b=p[i+2]; let lum=(r*.2126+g*.7152+b*.0722)/255; lum=Math.max(0,Math.min(1,(lum-.5)*1.28+.5)); if(white){const ratio=(.10+.90*lum); p[i]=Math.min(255,255*ratio);p[i+1]=Math.min(255,255*ratio);p[i+2]=Math.min(255,255*ratio);} else {const boost=.08+.92*lum; p[i]=Math.min(255,tr*boost);p[i+1]=Math.min(255,tg*boost);p[i+2]=Math.min(255,tb*boost);} } x.putImageData(d,0,0); cache.set(key,c); return c;}
-function drawContain(ctx,img,color,pad=.02){const w=ctx.canvas.width,h=ctx.canvas.height; const src=tintedCanvas(img,color); const scale=Math.min(w/src.width,h/src.height)*(1-pad*2); const dw=src.width*scale,dh=src.height*scale; ctx.drawImage(src,(w-dw)/2,(h-dh)/2,dw,dh); return {x:(w-dw)/2,y:(h-dh)/2,w:dw,h:dh,scale};}
+function drawContain(ctx,img,color,pad=.02){const w=ctx.canvas.width,h=ctx.canvas.height; const src=tintedCanvas(img,color); const scale=Math.min(w/src.width,h/src.height)*(1-pad*2); const dw=src.width*scale,dh=src.height*scale; const x=(w-dw)/2,y=(h-dh)/2;
+  // Sombreamento discreto ao redor do mapa-base para destacar a silhueta sem alterar sua geometria.
+  ctx.save(); ctx.shadowColor='rgba(17,24,39,.24)'; ctx.shadowBlur=Math.max(10,w*.018); ctx.shadowOffsetX=0; ctx.shadowOffsetY=Math.max(3,h*.006); ctx.drawImage(src,x,y,dw,dh); ctx.restore();
+  return {x,y,w:dw,h:dh,scale};}
 function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canvas.height, src=tintedCanvas(img,color); const front=view==='front';
-  // Manga corrigida pelo novo arquivo enviado. A peça-base corresponde ao lado direito visual;
-  // o lado esquerdo é obtido por espelhamento horizontal.
+  // A peça enviada corresponde ao lado esquerdo visual; o lado direito é o espelhamento horizontal.
   const dw=W*(front?0.205:0.210), dh=dw*(src.height/src.width);
   const y=H*(front?0.128:0.128);
   const x= side==='right' ? W*(front?0.739:0.734) : W*(front?0.056:0.052);
   ctx.save();
   ctx.translate(x+dw/2,y+dh/2);
-  if(side==='left') ctx.scale(-1,1);
+  if(side==='right') ctx.scale(-1,1);
   ctx.drawImage(src,-dw/2,-dh/2,dw,dh);
   ctx.restore();
 }
 function drawCollar(ctx,type,color){if(state.view==='back') return; const img=imgs[type],src=tintedCanvas(img,color); const W=ctx.canvas.width,H=ctx.canvas.height; let wFrac,yFrac;
- if(type==='round'){wFrac=.286;yFrac=.065}else if(type==='madrid'){wFrac=.286;yFrac=.063}else{wFrac=.284;yFrac=.064}
+ // Redução uniforme de 5% em relação ao ajuste anterior e descida fina de ~1 mm visual.
+ if(type==='round'){wFrac=.2717;yFrac=.067}else if(type==='madrid'){wFrac=.2717;yFrac=.065}else{wFrac=.2698;yFrac=.066}
  const dw=W*wFrac, dh=dw*(src.height/src.width), x=(W-dw)/2, y=H*yFrac; ctx.drawImage(src,x,y,dw,dh);
 }
 function render(){if(!imgs.front.complete) return; for(const c of Object.values(cvs)){c.getContext('2d').clearRect(0,0,c.width,c.height)}; const baseImg=state.view==='front'?imgs.front:imgs.back; drawContain(cvs.base.getContext('2d'),baseImg,state.body,.025); if(state.sleevesActive){drawSleeve(cvs.sleeves.getContext('2d'),imgs.sleeve,state.sleeves,'left',state.view); drawSleeve(cvs.sleeves.getContext('2d'),imgs.sleeve,state.sleeves,'right',state.view);} if(state.collarActive && state.view==='front'){drawCollar(cvs.collar.getContext('2d'),state.collarType,state.collar);} updateUI();}
