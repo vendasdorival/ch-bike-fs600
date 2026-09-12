@@ -146,10 +146,11 @@ const COLLAR_DATA = {
   sejam feitas aqui sem alterar corpo, mangas ou a lógica de cores.
 */
 const COLLAR_LAYOUT = {
-  // Dimensão aprovada mantida. Ajuste final: 1 mm mais baixa.
-  madrid:  { x:384.8, y:13.6, w:274.0, h:172.2 },
-  redonda: { x:390.1, y:15.6, w:260.7, h:163.7 },
-  v:       { x:382.7, y:15.6, w:273.4, h:164.4 }
+  // Ajuste fino aprovado: 0,5 mm para a esquerda e 1 mm para baixo.
+  // Valores mantidos de forma isolada para não afetar corpo, mangas ou demais comandos.
+  madrid:  { x:382.9, y:17.4, w:274.0, h:172.2 },
+  redonda: { x:388.2, y:19.4, w:260.7, h:163.7 },
+  v:       { x:380.8, y:19.4, w:273.4, h:164.4 }
 };
 
 const collarImages = {};
@@ -403,244 +404,156 @@ function render() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.putImageData(im,0,0);
 
+  // Valorização visual interna do CORPO.
+  applyAthleticBodyEffect();
+
+  // Elementos independentes continuam por cima.
   drawActiveCollar();
-
-  // REALISMO ESTRUTURAL:
-  // mantém exatamente a geometria atual e acrescenta somente luz/sombra.
-  // Não desenha linhas de contorno.
-  applyRealisticShading();
-
   applyShirtShadow();
 }
 
-// Cache da sombra suave das emendas existentes no molde original.
-let seamShadowCache = null;
 
-function buildSeamShadowCache() {
+// ================================================================
+// EFEITO ATLÉTICO INTERNO DO CORPO
+// ================================================================
+// Funciona como um PowerClip: o sombreamento é criado em uma camada
+// separada e recortado exclusivamente pela região CORPO.
+// Não altera geometria, manga, gola, automações ou preenchimentos.
+function applyAthleticBodyEffect() {
+  if (!originalPixels) return;
+
   const w = canvas.width;
   const h = canvas.height;
 
-  const seam = document.createElement("canvas");
-  seam.width = w;
-  seam.height = h;
-  const sctx = seam.getContext("2d", { willReadFrequently:true });
-  const data = sctx.createImageData(w, h);
-  const d = data.data;
+  // Máscara exclusiva da região CORPO.
+  const bodyMask = document.createElement("canvas");
+  bodyMask.width = w;
+  bodyMask.height = h;
+  const bm = bodyMask.getContext("2d");
+  const maskData = bm.createImageData(w, h);
+  const mp = maskData.data;
 
-  // Detecta apenas transições reais entre as regiões já existentes
-  // no arquivo-base. Isso preserva a construção original do projeto.
-  for (let y = 2; y < h - 2; y++) {
-    for (let x = 2; x < w - 2; x++) {
-      const idx = (y * w + x) * 4;
-      const a = originalPixels[idx + 3];
-      if (a < 40) continue;
+  for (let i = 0; i < mp.length; i += 4) {
+    const sr = originalPixels[i];
+    const sg = originalPixels[i + 1];
+    const sb = originalPixels[i + 2];
+    const sa = originalPixels[i + 3];
+    if (sa === 0) continue;
 
-      const here = classify(
-        originalPixels[idx],
-        originalPixels[idx + 1],
-        originalPixels[idx + 2]
+    const region = classify(sr, sg, sb);
+    if (region !== "white") continue;
+
+    const pixelIndex = i / 4;
+    const px = pixelIndex % w;
+    const py = Math.floor(pixelIndex / w);
+
+    // Respeita os mesmos recortes já usados pelo corpo principal.
+    if (px >= 400 && px <= 660 && py < 62) continue;
+
+    const smallLeftArtifact = (px >= 387 && px <= 399 && py < 62);
+    const rightArrowHead = (px >= 717 && px <= 740 && py < (86 + (px - 717) * 0.40));
+    const rightArrowShaft = (px >= 741 && px <= 799 && py < 75);
+    if (smallLeftArtifact || rightArrowHead || rightArrowShaft) continue;
+
+    mp[i] = 255;
+    mp[i + 1] = 255;
+    mp[i + 2] = 255;
+    mp[i + 3] = sa;
+  }
+  bm.putImageData(maskData, 0, 0);
+
+  // Camada do efeito.
+  const fx = document.createElement("canvas");
+  fx.width = w;
+  fx.height = h;
+  const f = fx.getContext("2d");
+
+  // Sombras laterais — nascem nas bordas e entram suavemente.
+  const leftGrad = f.createLinearGradient(w * 0.17, 0, w * 0.40, 0);
+  leftGrad.addColorStop(0.00, "rgba(0,0,0,0.28)");
+  leftGrad.addColorStop(0.42, "rgba(0,0,0,0.15)");
+  leftGrad.addColorStop(1.00, "rgba(0,0,0,0.00)");
+  f.fillStyle = leftGrad;
+  f.fillRect(w * 0.12, h * 0.16, w * 0.31, h * 0.74);
+
+  const rightGrad = f.createLinearGradient(w * 0.83, 0, w * 0.60, 0);
+  rightGrad.addColorStop(0.00, "rgba(0,0,0,0.28)");
+  rightGrad.addColorStop(0.42, "rgba(0,0,0,0.15)");
+  rightGrad.addColorStop(1.00, "rgba(0,0,0,0.00)");
+  f.fillStyle = rightGrad;
+  f.fillRect(w * 0.57, h * 0.16, w * 0.31, h * 0.74);
+
+  function strokeCurve(points, width, alpha, blur) {
+    f.save();
+    f.beginPath();
+    f.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i += 3) {
+      f.bezierCurveTo(
+        points[i][0], points[i][1],
+        points[i+1][0], points[i+1][1],
+        points[i+2][0], points[i+2][1]
       );
-      if (!here) continue;
-
-      let boundary = false;
-      const offsets = [-2, 2, -2*w, 2*w];
-
-      for (const off of offsets) {
-        const ni = idx + off * 4;
-        if (ni < 0 || ni >= originalPixels.length) continue;
-
-        const other = classify(
-          originalPixels[ni],
-          originalPixels[ni + 1],
-          originalPixels[ni + 2]
-        );
-
-        // Só interessa emenda entre duas áreas editáveis diferentes.
-        // O contorno externo não é desenhado aqui.
-        if (other && other !== here) {
-          boundary = true;
-          break;
-        }
-      }
-
-      if (boundary) {
-        d[idx] = 0;
-        d[idx + 1] = 0;
-        d[idx + 2] = 0;
-        d[idx + 3] = 105;
-      }
     }
+    f.strokeStyle = `rgba(0,0,0,${alpha})`;
+    f.lineWidth = width;
+    f.lineCap = "round";
+    f.lineJoin = "round";
+    f.shadowColor = `rgba(0,0,0,${Math.min(alpha + 0.10, 0.5)})`;
+    f.shadowBlur = blur;
+    f.stroke();
+    f.restore();
   }
 
-  sctx.putImageData(data, 0, 0);
+  // Linha de peito / cava.
+  strokeCurve([
+    [w*0.205, h*0.305],
+    [w*0.255, h*0.330], [w*0.315, h*0.335], [w*0.385, h*0.315]
+  ], w*0.013, 0.16, 18);
 
-  const blurred = document.createElement("canvas");
-  blurred.width = w;
-  blurred.height = h;
-  const bctx = blurred.getContext("2d");
-  bctx.filter = "blur(7px)";
-  bctx.drawImage(seam, 0, 0);
-  bctx.filter = "none";
+  strokeCurve([
+    [w*0.795, h*0.305],
+    [w*0.745, h*0.330], [w*0.685, h*0.335], [w*0.615, h*0.315]
+  ], w*0.013, 0.16, 18);
 
-  seamShadowCache = blurred;
-}
+  // Pequena segunda dobra abaixo do peito.
+  strokeCurve([
+    [w*0.215, h*0.350],
+    [w*0.265, h*0.366], [w*0.320, h*0.370], [w*0.365, h*0.354]
+  ], w*0.008, 0.09, 14);
 
-function applyRealisticShading() {
-  const w = canvas.width;
-  const h = canvas.height;
-  if (!w || !h) return;
+  strokeCurve([
+    [w*0.785, h*0.350],
+    [w*0.735, h*0.366], [w*0.680, h*0.370], [w*0.635, h*0.354]
+  ], w*0.008, 0.09, 14);
 
-  // Fotografia atual da camisa já recolorida e com a gola ativa.
-  const base = document.createElement("canvas");
-  base.width = w;
-  base.height = h;
-  const bctx = base.getContext("2d");
-  bctx.drawImage(canvas, 0, 0);
+  // Dobras inferiores laterais.
+  strokeCurve([
+    [w*0.205, h*0.735],
+    [w*0.255, h*0.770], [w*0.315, h*0.785], [w*0.395, h*0.770]
+  ], w*0.014, 0.17, 20);
 
-  // Máscara baseada exclusivamente na geometria visível atual.
-  const mask = document.createElement("canvas");
-  mask.width = w;
-  mask.height = h;
-  const mctx = mask.getContext("2d");
-  mctx.drawImage(base, 0, 0);
-  mctx.globalCompositeOperation = "source-in";
-  mctx.fillStyle = "#ffffff";
-  mctx.fillRect(0, 0, w, h);
-  mctx.globalCompositeOperation = "source-over";
+  strokeCurve([
+    [w*0.795, h*0.735],
+    [w*0.745, h*0.770], [w*0.685, h*0.785], [w*0.605, h*0.770]
+  ], w*0.014, 0.17, 20);
 
-  // ============================================================
-  // 1) SOMBRA DAS BORDAS PARA DENTRO
-  // Cria um "negativo" da camisa, desfoca e mostra somente
-  // a parte que invade suavemente a silhueta.
-  // Nenhuma linha é desenhada.
-  // ============================================================
-  const outside = document.createElement("canvas");
-  outside.width = w;
-  outside.height = h;
-  const octx = outside.getContext("2d");
-  octx.fillStyle = "#000";
-  octx.fillRect(0, 0, w, h);
-  octx.globalCompositeOperation = "destination-out";
-  octx.drawImage(mask, 0, 0);
-  octx.globalCompositeOperation = "source-over";
+  strokeCurve([
+    [w*0.195, h*0.790],
+    [w*0.275, h*0.825], [w*0.360, h*0.835], [w*0.455, h*0.820]
+  ], w*0.011, 0.13, 18);
 
-  const inner = document.createElement("canvas");
-  inner.width = w;
-  inner.height = h;
-  const ictx = inner.getContext("2d");
-  ictx.filter = "blur(24px)";
-  ictx.drawImage(outside, 0, 0);
-  ictx.filter = "none";
-  ictx.globalCompositeOperation = "destination-in";
-  ictx.drawImage(mask, 0, 0);
-  ictx.globalCompositeOperation = "source-over";
+  strokeCurve([
+    [w*0.805, h*0.790],
+    [w*0.725, h*0.825], [w*0.640, h*0.835], [w*0.545, h*0.820]
+  ], w*0.011, 0.13, 18);
 
-  // Segunda faixa, mais curta, dá definição sem criar contorno.
-  const innerFine = document.createElement("canvas");
-  innerFine.width = w;
-  innerFine.height = h;
-  const ifctx = innerFine.getContext("2d");
-  ifctx.filter = "blur(11px)";
-  ifctx.drawImage(outside, 0, 0);
-  ifctx.filter = "none";
-  ifctx.globalCompositeOperation = "destination-in";
-  ifctx.drawImage(mask, 0, 0);
-  ifctx.globalCompositeOperation = "source-over";
+  // Recorta o efeito exclusivamente no corpo.
+  f.globalCompositeOperation = "destination-in";
+  f.drawImage(bodyMask, 0, 0);
+  f.globalCompositeOperation = "source-over";
 
-  // ============================================================
-  // 2) SOMBRAS NAS EMENDAS DO PRÓPRIO MOLDE
-  // Detectadas da imagem-base; viram sombra difusa, não linha.
-  // ============================================================
-  if (!seamShadowCache) buildSeamShadowCache();
-
-  // ============================================================
-  // 3) DOBRAS DISCRETAS NA PARTE INFERIOR
-  // São apenas luz/sombra translúcida, recortadas pela camisa.
-  // ============================================================
-  const foldsShadow = document.createElement("canvas");
-  foldsShadow.width = w;
-  foldsShadow.height = h;
-  const fs = foldsShadow.getContext("2d");
-
-  const sx = w / 1060;
-  const sy = h / 1008;
-
-  fs.lineCap = "round";
-  fs.lineJoin = "round";
-  fs.strokeStyle = "rgba(0,0,0,0.50)";
-  fs.lineWidth = 16 * sx;
-  fs.filter = `blur(${10 * sx}px)`;
-
-  const shadowPaths = [
-    [355, 955, 380, 900, 392, 830],
-    [470, 982, 485, 925, 490, 855],
-    [590, 982, 575, 925, 570, 850],
-    [705, 955, 680, 900, 666, 830]
-  ];
-
-  for (const [x1,y1,cx,cy,x2,y2] of shadowPaths) {
-    fs.beginPath();
-    fs.moveTo(x1*sx, y1*sy);
-    fs.quadraticCurveTo(cx*sx, cy*sy, x2*sx, y2*sy);
-    fs.stroke();
-  }
-  fs.filter = "none";
-
-  const foldsLight = document.createElement("canvas");
-  foldsLight.width = w;
-  foldsLight.height = h;
-  const fl = foldsLight.getContext("2d");
-  fl.lineCap = "round";
-  fl.strokeStyle = "rgba(255,255,255,0.65)";
-  fl.lineWidth = 11 * sx;
-  fl.filter = `blur(${9 * sx}px)`;
-
-  const lightPaths = [
-    [376, 958, 398, 906, 408, 842],
-    [488, 980, 500, 930, 505, 866],
-    [572, 980, 560, 930, 555, 862],
-    [684, 958, 662, 906, 652, 842]
-  ];
-
-  for (const [x1,y1,cx,cy,x2,y2] of lightPaths) {
-    fl.beginPath();
-    fl.moveTo(x1*sx, y1*sy);
-    fl.quadraticCurveTo(cx*sx, cy*sy, x2*sx, y2*sy);
-    fl.stroke();
-  }
-  fl.filter = "none";
-
-  // ============================================================
-  // COMPOSIÇÃO FINAL
-  // source-atop impede qualquer efeito de ultrapassar a geometria.
-  // multiply/screen trabalham sobre a cor escolhida, sem substituí-la.
-  // ============================================================
-  ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(base, 0, 0);
-
-  ctx.save();
-  ctx.globalCompositeOperation = "source-atop";
-
-  ctx.globalAlpha = 0.24;
-  ctx.globalCompositeOperation = "multiply";
-  ctx.drawImage(inner, 0, 0);
-
-  ctx.globalAlpha = 0.09;
-  ctx.drawImage(innerFine, 0, 0);
-
-  if (seamShadowCache) {
-    ctx.globalAlpha = 0.14;
-    ctx.drawImage(seamShadowCache, 0, 0);
-  }
-
-  ctx.globalAlpha = 0.11;
-  ctx.drawImage(foldsShadow, 0, 0);
-
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = 0.08;
-  ctx.drawImage(foldsLight, 0, 0);
-
-  ctx.restore();
+  // Aplica sobre a cor atual do corpo.
+  ctx.drawImage(fx, 0, 0);
 }
 
 // ACABAMENTO PREMIUM — sombra suave ao redor de toda a camisa.
@@ -672,7 +585,7 @@ function drawActiveCollar() {
   const w = Math.max(1, Math.round(pos.w));
   const h = Math.max(1, Math.round(pos.h));
 
-  // Camada 1: mantém a geometria externa da gola editável.
+  // Camada principal da gola: preserva exatamente a geometria original e troca apenas a cor.
   const tmp = document.createElement("canvas");
   tmp.width = w;
   tmp.height = h;
@@ -683,48 +596,8 @@ function drawActiveCollar() {
   t.fillRect(0, 0, w, h);
   t.globalCompositeOperation = "source-over";
 
-  // Camada 2 (correção cirúrgica): preenche somente o vazio CENTRAL
-  // da gola com o degradê fixo preto -> cinza, sem alterar a geometria.
-  const source = document.createElement("canvas");
-  source.width = w;
-  source.height = h;
-  const sctx = source.getContext("2d", { willReadFrequently: true });
-  sctx.drawImage(img, 0, 0, w, h);
-  const data = sctx.getImageData(0, 0, w, h);
-  const d = data.data;
-
-  // Flood-fill a partir do centro para identificar apenas o buraco interno
-  // da gola. A área externa, também transparente, fica intocada.
-  const cx = Math.floor(w / 2);
-  const cy = Math.floor(h / 2);
-  const mask = new Uint8Array(w * h);
-  const queue = new Int32Array(w * h);
-  let qStart = 0, qEnd = 0;
-  const start = cy * w + cx;
-  if (d[start * 4 + 3] < 160) {
-    queue[qEnd++] = start;
-    mask[start] = 255;
-  }
-
-  while (qStart < qEnd) {
-    const idx = queue[qStart++];
-    const x = idx % w;
-    const y = Math.floor(idx / w);
-    const neighbors = [idx - 1, idx + 1, idx - w, idx + w];
-    if (x === 0) neighbors[0] = -1;
-    if (x === w - 1) neighbors[1] = -1;
-    if (y === 0) neighbors[2] = -1;
-    if (y === h - 1) neighbors[3] = -1;
-
-    for (const n of neighbors) {
-      if (n < 0 || mask[n]) continue;
-      if (d[n * 4 + 3] < 160) {
-        mask[n] = 255;
-        queue[qEnd++] = n;
-      }
-    }
-  }
-
+  // Fundo interno da gola. Para a Gola V usamos um recorte geométrico explícito,
+  // evitando que o degradê vaze para a área externa e forme o retângulo indesejado.
   const gradientLayer = document.createElement("canvas");
   gradientLayer.width = w;
   gradientLayer.height = h;
@@ -734,15 +607,65 @@ function drawActiveCollar() {
   grad.addColorStop(0.52, "#707070");
   grad.addColorStop(1, "#c8c8c8");
   gctx.fillStyle = grad;
-  gctx.fillRect(0, 0, w, h);
 
-  const gm = gctx.getImageData(0, 0, w, h);
-  for (let i = 0; i < mask.length; i++) gm.data[i * 4 + 3] = mask[i];
-  gctx.putImageData(gm, 0, 0);
+  if (activeCollar === "v") {
+    // Máscara interna da Gola V: somente a abertura da gola recebe o degradê.
+    gctx.beginPath();
+    gctx.moveTo(w * 0.24, h * 0.18);
+    gctx.bezierCurveTo(w * 0.35, h * 0.30, w * 0.40, h * 0.60, w * 0.50, h * 0.88);
+    gctx.bezierCurveTo(w * 0.60, h * 0.60, w * 0.65, h * 0.30, w * 0.76, h * 0.18);
+    gctx.lineTo(w * 0.72, h * 0.12);
+    gctx.bezierCurveTo(w * 0.61, h * 0.20, w * 0.39, h * 0.20, w * 0.28, h * 0.12);
+    gctx.closePath();
+    gctx.fill();
+  } else {
+    // Para Madrid e Redonda, mantém o preenchimento interno já aprovado,
+    // limitado por uma forma elíptica interna para não criar fundo retangular.
+    gctx.beginPath();
+    gctx.ellipse(w * 0.50, h * 0.48, w * 0.29, h * 0.37, 0, 0, Math.PI * 2);
+    gctx.fill();
+  }
 
-  // Primeiro o centro preenchido; depois a gola editável por cima.
+  // Primeiro o centro interno; depois a gola editável por cima.
   ctx.drawImage(gradientLayer, pos.x, pos.y, pos.w, pos.h);
   ctx.drawImage(tmp, pos.x, pos.y, pos.w, pos.h);
+
+  // Costura branca aprovada: pontilhado um pouco mais espesso para valorizar a gola.
+  drawCollarStitching(activeCollar, pos);
+}
+
+function drawCollarStitching(type, pos) {
+  const x = pos.x, y = pos.y, w = pos.w, h = pos.h;
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.96)";
+  ctx.lineWidth = 2.35;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.setLineDash([6, 5]);
+
+  ctx.beginPath();
+  if (type === "v") {
+    // Linha interna principal acompanhando o V.
+    ctx.moveTo(x + w * 0.27, y + h * 0.22);
+    ctx.bezierCurveTo(x + w * 0.34, y + h * 0.40, x + w * 0.41, y + h * 0.68, x + w * 0.50, y + h * 0.89);
+    ctx.bezierCurveTo(x + w * 0.59, y + h * 0.68, x + w * 0.66, y + h * 0.40, x + w * 0.73, y + h * 0.22);
+    ctx.stroke();
+
+    // Costura na faixa traseira superior da gola.
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.29, y + h * 0.14);
+    ctx.bezierCurveTo(x + w * 0.40, y + h * 0.21, x + w * 0.60, y + h * 0.21, x + w * 0.71, y + h * 0.14);
+    ctx.stroke();
+  } else if (type === "redonda") {
+    ctx.ellipse(x + w * 0.50, y + h * 0.48, w * 0.27, h * 0.34, 0, Math.PI * 0.08, Math.PI * 0.92);
+    ctx.stroke();
+  } else if (type === "madrid") {
+    ctx.moveTo(x + w * 0.25, y + h * 0.25);
+    ctx.bezierCurveTo(x + w * 0.31, y + h * 0.55, x + w * 0.40, y + h * 0.73, x + w * 0.50, y + h * 0.78);
+    ctx.bezierCurveTo(x + w * 0.60, y + h * 0.73, x + w * 0.69, y + h * 0.55, x + w * 0.75, y + h * 0.25);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 document.getElementById("apply").onclick=()=>applyCommand(cmd.value);
