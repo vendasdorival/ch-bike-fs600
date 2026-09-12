@@ -547,57 +547,85 @@ function drawActiveCollar() {
   const w = Math.max(1, Math.round(pos.w));
   const h = Math.max(1, Math.round(pos.h));
 
-  // Camada principal da gola: preserva exatamente a geometria original e troca apenas a cor.
+  // Usa a própria imagem ORIGINAL da gola como geometria.
+  // O degradê interno original preto -> cinza é preservado exatamente
+  // na abertura real de cada uma das 3 golas.
   const tmp = document.createElement("canvas");
   tmp.width = w;
   tmp.height = h;
-  const t = tmp.getContext("2d");
+  const t = tmp.getContext("2d", { willReadFrequently:true });
   t.drawImage(img, 0, 0, w, h);
-  t.globalCompositeOperation = "source-in";
-  t.fillStyle = `rgb(${tint.r},${tint.g},${tint.b})`;
-  t.fillRect(0, 0, w, h);
-  t.globalCompositeOperation = "source-over";
 
-  // Fundo interno da gola. Para a Gola V usamos um recorte geométrico explícito,
-  // evitando que o degradê vaze para a área externa e forme o retângulo indesejado.
-  const gradientLayer = document.createElement("canvas");
-  gradientLayer.width = w;
-  gradientLayer.height = h;
-  const gctx = gradientLayer.getContext("2d");
-  const grad = gctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, "#111111");
-  grad.addColorStop(0.52, "#707070");
-  grad.addColorStop(1, "#c8c8c8");
-  gctx.fillStyle = grad;
+  const imageData = t.getImageData(0, 0, w, h);
+  const p = imageData.data;
 
-  if (activeCollar === "v") {
-    // Máscara interna da Gola V: somente a abertura da gola recebe o degradê.
-    gctx.beginPath();
-    gctx.moveTo(w * 0.24, h * 0.18);
-    gctx.bezierCurveTo(w * 0.35, h * 0.30, w * 0.40, h * 0.60, w * 0.50, h * 0.88);
-    gctx.bezierCurveTo(w * 0.60, h * 0.60, w * 0.65, h * 0.30, w * 0.76, h * 0.18);
-    gctx.lineTo(w * 0.72, h * 0.12);
-    gctx.bezierCurveTo(w * 0.61, h * 0.20, w * 0.39, h * 0.20, w * 0.28, h * 0.12);
-    gctx.closePath();
-    gctx.fill();
-  } else {
-    // Para Madrid e Redonda, mantém o preenchimento interno já aprovado,
-    // limitado por uma forma elíptica interna para não criar fundo retangular.
-    gctx.beginPath();
-    gctx.ellipse(w * 0.50, h * 0.48, w * 0.29, h * 0.37, 0, 0, Math.PI * 2);
-    gctx.fill();
+  for (let i = 0; i < p.length; i += 4) {
+    const a = p[i+3];
+    if (a === 0) continue;
+
+    const r = p[i];
+    const g = p[i+1];
+    const b = p[i+2];
+
+    // A parte clara/branca da imagem é o TECIDO da gola.
+    // Somente ela recebe a cor escolhida.
+    // A região escura/cinza interna permanece intacta,
+    // conservando o degradê e a geometria originais.
+    const brightness = (r + g + b) / 3;
+    const chroma = Math.max(r,g,b) - Math.min(r,g,b);
+
+    if (brightness >= 178 && chroma <= 22) {
+      // Mantém suavemente o antialias das bordas.
+      const strength = Math.min(1, Math.max(0, (brightness - 178) / 52));
+      p[i]   = Math.round(r * (1-strength) + tint.r * strength);
+      p[i+1] = Math.round(g * (1-strength) + tint.g * strength);
+      p[i+2] = Math.round(b * (1-strength) + tint.b * strength);
+    }
   }
 
-  // Primeiro o centro interno; depois a gola editável por cima.
-  ctx.drawImage(gradientLayer, pos.x, pos.y, pos.w, pos.h);
+  t.putImageData(imageData, 0, 0);
+
+  // Desenha a gola completa já com o fundo interno original preservado.
   ctx.drawImage(tmp, pos.x, pos.y, pos.w, pos.h);
 
-  // Costura branca aprovada: pontilhado um pouco mais espesso para valorizar a gola.
-  drawCollarStitching(activeCollar, pos);
+  // Pontilhado acompanha a borda externa REAL da imagem da gola.
+  drawCollarStitching(activeCollar, pos, img);
 }
 
-function drawCollarStitching(type, pos) {
-  const x = pos.x, y = pos.y, w = pos.w, h = pos.h;
+function drawCollarStitching(type, pos, img) {
+  const w = Math.max(1, Math.round(pos.w));
+  const h = Math.max(1, Math.round(pos.h));
+
+  // Lê a geometria real da imagem da própria gola.
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = w;
+  maskCanvas.height = h;
+  const mctx = maskCanvas.getContext("2d", { willReadFrequently:true });
+  mctx.drawImage(img, 0, 0, w, h);
+
+  const data = mctx.getImageData(0, 0, w, h).data;
+
+  // Para cada coluna, encontra o pixel opaco mais baixo.
+  // Essa sequência é exatamente a borda externa inferior/lateral da gola,
+  // incluindo a geometria específica da Madrid, Redonda e V.
+  const points = [];
+  for (let x = 0; x < w; x++) {
+    let bottomY = -1;
+
+    for (let y = h - 1; y >= 0; y--) {
+      const idx = (y * w + x) * 4;
+      if (data[idx + 3] > 90) {
+        bottomY = y;
+        break;
+      }
+    }
+
+    if (bottomY >= 0) {
+      points.push([pos.x + x, pos.y + bottomY]);
+    }
+  }
+
+  if (points.length < 2) return;
 
   ctx.save();
   ctx.strokeStyle = "rgba(255,255,255,0.96)";
@@ -606,56 +634,17 @@ function drawCollarStitching(type, pos) {
   ctx.lineJoin = "round";
   ctx.setLineDash([6, 5]);
 
-  // REGRA: o pontilhado usa exatamente a MESMA largura da gola.
-  // Não aumenta nem reduz lateralmente em relação ao box da própria gola.
-  const left = x + 1;
-  const right = x + w - 1;
-  const centerX = x + w * 0.50;
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
 
-  if (type === "v") {
-    ctx.beginPath();
-    ctx.moveTo(left, y + h * 0.13);
-    ctx.bezierCurveTo(
-      x + w * 0.18, y + h * 0.42,
-      x + w * 0.34, y + h * 0.78,
-      centerX, y + h - 1
-    );
-    ctx.bezierCurveTo(
-      x + w * 0.66, y + h * 0.78,
-      x + w * 0.82, y + h * 0.42,
-      right, y + h * 0.13
-    );
-    ctx.stroke();
-
-  } else if (type === "redonda") {
-    ctx.beginPath();
-    ctx.ellipse(
-      centerX,
-      y + h * 0.50,
-      (w / 2) - 1,
-      (h / 2) - 1,
-      0,
-      Math.PI * 0.06,
-      Math.PI * 0.94
-    );
-    ctx.stroke();
-
-  } else if (type === "madrid") {
-    ctx.beginPath();
-    ctx.moveTo(left, y + h * 0.14);
-    ctx.bezierCurveTo(
-      x + w * 0.16, y + h * 0.45,
-      x + w * 0.34, y + h * 0.80,
-      centerX, y + h - 1
-    );
-    ctx.bezierCurveTo(
-      x + w * 0.66, y + h * 0.80,
-      x + w * 0.84, y + h * 0.45,
-      right, y + h * 0.14
-    );
-    ctx.stroke();
+  // Amostragem leve para deixar a curva limpa sem alterar a geometria.
+  for (let i = 1; i < points.length; i += 2) {
+    ctx.lineTo(points[i][0], points[i][1]);
   }
 
+  const last = points[points.length - 1];
+  ctx.lineTo(last[0], last[1]);
+  ctx.stroke();
   ctx.restore();
 }
 
