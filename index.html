@@ -106,25 +106,31 @@ const cache=new Map();
 function tintedCanvas(img,color){const key=img.src.slice(-48)+'|'+color+'|fx2'; if(cache.has(key)) return cache.get(key); const c=document.createElement('canvas'); c.width=img.naturalWidth;c.height=img.naturalHeight; const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(img,0,0); const d=x.getImageData(0,0,c.width,c.height), p=d.data,[tr,tg,tb]=hexToRgb(color); const white=color.toLowerCase()==='#ffffff'; for(let i=0;i<p.length;i+=4){if(p[i+3]<4) continue; const r=p[i],g=p[i+1],b=p[i+2]; let lum=(r*.2126+g*.7152+b*.0722)/255; lum=Math.max(0,Math.min(1,(lum-.5)*1.28+.5)); if(white){const ratio=(.10+.90*lum); p[i]=Math.min(255,255*ratio);p[i+1]=Math.min(255,255*ratio);p[i+2]=Math.min(255,255*ratio);} else {const boost=.08+.92*lum; p[i]=Math.min(255,tr*boost);p[i+1]=Math.min(255,tg*boost);p[i+2]=Math.min(255,tb*boost);} } x.putImageData(d,0,0); cache.set(key,c); return c;}
 // GOLAS: somente a faixa de tecido da gola recebe cor. O miolo/sombra interna permanece fixo e nunca fica vazado.
 function collarCanvas(img,color,type){
-  const key=img.src.slice(-48)+'|'+color+'|collarBandVisualMap|'+type;
+  const key=img.src.slice(-48)+'|'+color+'|collarBandFixedInteriorV4|'+type;
   if(cache.has(key)) return cache.get(key);
   const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
   const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(img,0,0);
   const d=x.getImageData(0,0,c.width,c.height), p=d.data, [tr,tg,tb]=hexToRgb(color);
   const white=color.toLowerCase()==='#ffffff';
-  // Regra: o fundo interno cinza é fixo. Só pixels claros/neutros da faixa da gola recebem cor.
-  for(let i=0;i<p.length;i+=4){
-    if(p[i+3]<4) continue;
-    const r=p[i],g=p[i+1],b=p[i+2];
-    const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
-    const lum=(r*.2126+g*.7152+b*.0722)/255;
-    const neutral=(mx-mn)<18;
-    const band=neutral && lum>.72;
-    if(!band) continue;
-    const shaped=Math.max(.18,Math.min(1,(lum-.60)/.40));
-    if(white){const q=205+50*shaped; p[i]=p[i+1]=p[i+2]=Math.min(255,q);}
-    else {const boost=.58+.42*shaped; p[i]=Math.min(255,tr*boost);p[i+1]=Math.min(255,tg*boost);p[i+2]=Math.min(255,tb*boost);}
+  // Mede o contorno alpha por linha/coluna. Só a faixa próxima ao contorno externo pode mudar de cor.
+  const L=new Int32Array(c.height), R=new Int32Array(c.height), T=new Int32Array(c.width), B=new Int32Array(c.width);
+  L.fill(c.width); R.fill(-1); T.fill(c.height); B.fill(-1);
+  for(let yy=0;yy<c.height;yy++) for(let xx=0;xx<c.width;xx++){
+    const a=p[(yy*c.width+xx)*4+3]; if(a<20) continue;
+    if(xx<L[yy])L[yy]=xx; if(xx>R[yy])R[yy]=xx; if(yy<T[xx])T[xx]=yy; if(yy>B[xx])B[xx]=yy;
   }
+  const edge=Math.max(22,Math.round(Math.min(c.width,c.height)*.11));
+  for(let yy=0;yy<c.height;yy++) for(let xx=0;xx<c.width;xx++){
+    const i=(yy*c.width+xx)*4; if(p[i+3]<20) continue;
+    const r=p[i],g=p[i+1],b=p[i+2], mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+    const lum=(r*.2126+g*.7152+b*.0722)/255, neutral=(mx-mn)<22;
+    const nearEdge=Math.min(xx-L[yy],R[yy]-xx,yy-T[xx],B[xx]-yy)<=edge;
+    if(!(nearEdge && neutral && lum>.58)) continue;
+    const shaped=Math.max(.12,Math.min(1,(lum-.50)/.50));
+    if(white){const q=195+60*shaped; p[i]=p[i+1]=p[i+2]=Math.min(255,q);}
+    else {const boost=.50+.50*shaped; p[i]=Math.min(255,tr*boost);p[i+1]=Math.min(255,tg*boost);p[i+2]=Math.min(255,tb*boost);}
+  }
+  // O miolo interno permanece exatamente como no PNG original.
   x.putImageData(d,0,0); cache.set(key,c); return c;
 }
 // MAPA VISUAL OFICIAL: 776 x 720 unidades. Todas as coordenadas da FRENTE vêm dos mapas enviados.
@@ -140,7 +146,7 @@ function drawMapped(ctx,img,color,box,flip=false,shadow=true){
 function drawBase(ctx,img,color,view){
   if(view==='front'){
     // Corpo frontal conforme mapa: aprox. X 126..650 / Y 126..685.
-    drawMapped(ctx,img,color,{x:58,y:116,w:660,h:586},false,true);
+    drawMapped(ctx,img,color,{x:82,y:126,w:612,h:543},false,true);
   }else{
     // Costas ainda preservadas da versão anterior; serão remapeadas na próxima etapa.
     const w=ctx.canvas.width,h=ctx.canvas.height,src=tintedCanvas(img,color),scale=Math.min(w/src.width,h/src.height)*.95,dw=src.width*scale,dh=src.height*scale;
@@ -156,7 +162,7 @@ function drawSleeve(ctx,img,color,side,view){
   // MANGAS.png já contém as duas mangas no alinhamento correto. Desenhamos uma única vez.
   // Caixa visual conforme o mapa frontal: aprox. X 82..694 / Y 176..354.
   if(side!=='both') return;
-  drawMapped(ctx,img,color,{x:82,y:176,w:612,h:178},false,false);
+  drawMapped(ctx,img,color,{x:82,y:174,w:612,h:173},false,false);
 }
 function drawCuff(ctx,side,view,color){
   if(view!=='front') return;
@@ -169,7 +175,7 @@ function drawCollar(ctx,type,color){
   if(state.view==='back') return;
   const img=imgs[type],src=collarCanvas(img,color,type);
   // Área comum das três golas, orientada pelo topo conforme mapa visual.
-  const b=mapBox(ctx,276,116,224,96);
+  const b=mapBox(ctx,310,116,156,96);
   const ratio=src.height/src.width;
   let dw=b.w,dh=dw*ratio;
   // mesma largura e mesmo topo; cada modelo desce naturalmente conforme sua geometria.
