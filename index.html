@@ -180,13 +180,15 @@ function drawCollar(ctx,type,color){
     const front=imgs.round, fixedBg=imgs.roundBg;
     const frontSrc=tintEditableCollar(front,color);
     const dw=W*wFrac, dh=dw*(frontSrc.height/frontSrc.width), x=(W-dw)/2, y=H*yFrac;
-    // O fundo tem proporção própria e é centralizado dentro da mesma área da gola; nunca é recolorido.
+    // O fundo permanece exatamente na posição aprovada.
     const bgW=dw*(fixedBg.naturalWidth/front.naturalWidth);
     const bgH=bgW*(fixedBg.naturalHeight/fixedBg.naturalWidth);
     const bgX=x+(dw-bgW)/2;
     const bgY=y+(dh-bgH)/2;
     ctx.drawImage(fixedBg,bgX,bgY,bgW,bgH);
-    ctx.drawImage(frontSrc,x,y,dw,dh);
+    // Somente a peça frontal/editável desce aproximadamente 1 mm visual.
+    const frontY=y+(H*.0052);
+    ctx.drawImage(frontSrc,x,frontY,dw,dh);
     return;
   }
   const img=imgs[type],src=tintedCollarCanvas(img,color,type);
