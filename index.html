@@ -175,20 +175,38 @@ function drawCollar(ctx,type,color){
   const W=ctx.canvas.width,H=ctx.canvas.height;
   let wFrac,yFrac;
   if(type==='round'){
-    // TESTE NOVA LÓGICA: fundo fixo atrás + peça frontal editável por cima.
+    // GOLA REDONDA EM DUAS CAMADAS:
+    // 1) fundo fixo/degradê atrás (não editável)
+    // 2) gola frontal editável por cima
     wFrac=.2567; yFrac=.068;
     const front=imgs.round, fixedBg=imgs.roundBg;
     const frontSrc=tintEditableCollar(front,color);
-    const dw=W*wFrac, dh=dw*(frontSrc.height/frontSrc.width), x=(W-dw)/2, y=H*yFrac;
-    // O fundo permanece exatamente na posição aprovada.
+
+    // Ajuste lateral: cada lado entra cerca de 1 mm para o centro.
+    const sideInset=W*.0036;
+    const baseW=W*wFrac;
+    const dw=baseW-(sideInset*2);
+    const baseDh=dw*(frontSrc.height/frontSrc.width);
+    const x=(W-dw)/2;
+
+    // Mantém a base inferior no mesmo lugar e AUMENTA a gola 1 mm para cima
+    // (não é deslocamento: a altura cresce apenas no topo).
+    const growFront=H*.0052;
+    const frontH=baseDh+growFront;
+    const frontY=(H*yFrac)+(H*.0052)-growFront;
+
+    // Fundo fixo: cresce 3 mm apenas para cima e cobre toda a área central.
+    // A largura acompanha a abertura da gola, sem mudar a cor junto com a borda.
     const bgW=dw*(fixedBg.naturalWidth/front.naturalWidth);
-    const bgH=bgW*(fixedBg.naturalHeight/fixedBg.naturalWidth);
+    const bgBaseH=bgW*(fixedBg.naturalHeight/fixedBg.naturalWidth);
+    const growBg=H*.0156;
+    const bgH=bgBaseH+growBg;
     const bgX=x+(dw-bgW)/2;
-    const bgY=y+(dh-bgH)/2;
+    const bgBaseY=(H*yFrac)+(baseDh-bgBaseH)/2;
+    const bgY=bgBaseY-growBg;
+
     ctx.drawImage(fixedBg,bgX,bgY,bgW,bgH);
-    // Somente a peça frontal/editável desce aproximadamente 1 mm visual.
-    const frontY=y+(H*.0052);
-    ctx.drawImage(frontSrc,x,frontY,dw,dh);
+    ctx.drawImage(frontSrc,x,frontY,dw,frontH);
     return;
   }
   const img=imgs[type],src=tintedCollarCanvas(img,color,type);
