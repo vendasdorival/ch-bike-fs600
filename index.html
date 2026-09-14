@@ -135,16 +135,7 @@ function collarCanvas(img,color,type){
 }
 // MAPA VISUAL OFICIAL: 776 x 720 unidades. Todas as coordenadas da FRENTE vêm dos mapas enviados.
 const MAP={w:776,h:720};
-// Ajuste global aprovado: conjunto frontal +5% de escala uniforme e 2 mm lógicos para cima.
-// Mantemos a proporção e o encaixe relativo de corpo, mangas, punhos e gola.
-const FRONT_ADJUST={scale:1.05,shiftY:-8}; // 4 unidades do mapa = 1 mm lógico; -8 = -2 mm.
-function mapBox(ctx,x,y,w,h){
-  const cx=MAP.w/2, cy=MAP.h/2, s=FRONT_ADJUST.scale;
-  const nx=cx+(x-cx)*s;
-  const ny=cy+(y-cy)*s+FRONT_ADJUST.shiftY;
-  const nw=w*s, nh=h*s;
-  return {x:ctx.canvas.width*nx/MAP.w,y:ctx.canvas.height*ny/MAP.h,w:ctx.canvas.width*nw/MAP.w,h:ctx.canvas.height*nh/MAP.h};
-}
+function mapBox(ctx,x,y,w,h){return {x:ctx.canvas.width*x/MAP.w,y:ctx.canvas.height*y/MAP.h,w:ctx.canvas.width*w/MAP.w,h:ctx.canvas.height*h/MAP.h};}
 function drawMapped(ctx,img,color,box,flip=false,shadow=true){
   const src=tintedCanvas(img,color), b=mapBox(ctx,box.x,box.y,box.w,box.h);
   ctx.save();
@@ -183,12 +174,17 @@ function drawCuff(ctx,side,view,color){
 function drawCollar(ctx,type,color){
   if(state.view==='back') return;
   const img=imgs[type],src=collarCanvas(img,color,type);
-  // Área comum das três golas, orientada pelo topo conforme mapa visual.
-  const b=mapBox(ctx,310,116,156,96);
+  // AJUSTE SOMENTE DA GOLA: +5% de tamanho, mantendo proporção,
+  // centralizada horizontalmente e subida ~2 mm (≈ 8 px no mapa visual).
+  // Corpo, mangas e demais elementos permanecem EXATAMENTE como na V4.
+  const base=mapBox(ctx,310,116,156,96);
+  const scale=1.05;
+  const dw=base.w*scale;
   const ratio=src.height/src.width;
-  let dw=b.w,dh=dw*ratio;
-  // mesma largura e mesmo topo; cada modelo desce naturalmente conforme sua geometria.
-  ctx.drawImage(src,b.x,b.y,dw,dh);
+  const dh=dw*ratio;
+  const x=base.x-(dw-base.w)/2;
+  const y=base.y-mapBox(ctx,0,0,0,8).h;
+  ctx.drawImage(src,x,y,dw,dh);
 }
 function render(){if(!imgs.front.complete) return; for(const c of Object.values(cvs)){c.getContext('2d').clearRect(0,0,c.width,c.height)}; const baseImg=state.view==='front'?imgs.front:imgs.back; drawBase(cvs.base.getContext('2d'),baseImg,state.body,state.view);
   if(state.sleevesActive){drawSleeve(cvs.sleeves.getContext('2d'),imgs.sleeve,state.sleeves,'both',state.view);if(state.cuffsActive){drawCuff(cvs.cuffs.getContext('2d'),'left',state.view,state.cuffs);drawCuff(cvs.cuffs.getContext('2d'),'right',state.view,state.cuffs);}}
