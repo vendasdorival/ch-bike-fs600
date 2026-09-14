@@ -174,17 +174,12 @@ function drawCuff(ctx,side,view,color){
 function drawCollar(ctx,type,color){
   if(state.view==='back') return;
   const img=imgs[type],src=collarCanvas(img,color,type);
-  // AJUSTE SOMENTE DA GOLA: +5% de tamanho, mantendo proporção,
-  // centralizada horizontalmente e subida ~2 mm (≈ 8 px no mapa visual).
-  // Corpo, mangas e demais elementos permanecem EXATAMENTE como na V4.
-  const base=mapBox(ctx,310,116,156,96);
-  const scale=1.05;
-  const dw=base.w*scale;
+  // Área comum das três golas, orientada pelo topo conforme mapa visual.
+  const b=mapBox(ctx,310,116,156,96);
   const ratio=src.height/src.width;
-  const dh=dw*ratio;
-  const x=base.x-(dw-base.w)/2;
-  const y=base.y-mapBox(ctx,0,0,0,8).h;
-  ctx.drawImage(src,x,y,dw,dh);
+  let dw=b.w,dh=dw*ratio;
+  // mesma largura e mesmo topo; cada modelo desce naturalmente conforme sua geometria.
+  ctx.drawImage(src,b.x,b.y,dw,dh);
 }
 function render(){if(!imgs.front.complete) return; for(const c of Object.values(cvs)){c.getContext('2d').clearRect(0,0,c.width,c.height)}; const baseImg=state.view==='front'?imgs.front:imgs.back; drawBase(cvs.base.getContext('2d'),baseImg,state.body,state.view);
   if(state.sleevesActive){drawSleeve(cvs.sleeves.getContext('2d'),imgs.sleeve,state.sleeves,'both',state.view);if(state.cuffsActive){drawCuff(cvs.cuffs.getContext('2d'),'left',state.view,state.cuffs);drawCuff(cvs.cuffs.getContext('2d'),'right',state.view,state.cuffs);}}
