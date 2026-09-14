@@ -105,10 +105,12 @@ const state = {
 };
 
 const MAP = {
- leftSleeve:  {x:57,  y:190, w:295},
- rightSleeve: {x:938, y:190, w:295},
+ // Alinhamento fino: mangas descidas ~0,8 mm visual (3 px no canvas)
+ leftSleeve:  {x:57,  y:193, w:295},
+ rightSleeve: {x:938, y:193, w:295},
  collars: {
-   redonda: {x:500, y:78, w:290},
+   // Redonda ampliada ~5,5% e reposicionada para cobrir totalmente a gola da base
+   redonda: {x:492, y:72, w:306},
    v:       {x:492, y:72, w:306},
    madrid:  {x:492, y:70, w:306}
  }
