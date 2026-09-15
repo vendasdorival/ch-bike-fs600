@@ -155,31 +155,36 @@ function drawCollar(ctx,type,color){if(state.view==='back') return; const img=im
 
  const x=(W-dw)/2, y=H*yFrac;
 
- // Sombra apenas na parte INTERNA da gola.
- // É desenhada antes da peça, portanto as bordas continuam recebendo normalmente a cor editável.
+ // Degradê radial somente na abertura INTERNA da gola.
+ // O centro fica mais claro e ganha profundidade em direção às bordas internas.
+ // A peça/gola editável é desenhada depois, portanto sua cor e suas bordas permanecem intactas.
  ctx.save();
  if(type==='v'){
-   const gx=x+dw*.50, gy=y+dh*.53;
-   const grad=ctx.createRadialGradient(gx,gy,0,gx,gy,dw*.31);
-   grad.addColorStop(0,'rgba(35,35,35,.24)');
-   grad.addColorStop(.58,'rgba(70,70,70,.13)');
-   grad.addColorStop(1,'rgba(255,255,255,0)');
+   const gx=x+dw*.50, gy=y+dh*.47;
+   const radius=dw*.34;
+   const grad=ctx.createRadialGradient(gx,gy,radius*.06,gx,gy,radius);
+   grad.addColorStop(0,'rgba(245,245,245,.42)');
+   grad.addColorStop(.42,'rgba(150,150,150,.34)');
+   grad.addColorStop(.76,'rgba(70,70,70,.46)');
+   grad.addColorStop(1,'rgba(25,25,25,.58)');
    ctx.fillStyle=grad;
    ctx.beginPath();
-   ctx.moveTo(x+dw*.23,y+dh*.24);
-   ctx.quadraticCurveTo(x+dw*.50,y+dh*.38,x+dw*.77,y+dh*.24);
-   ctx.lineTo(x+dw*.50,y+dh*.90);
+   ctx.moveTo(x+dw*.18,y+dh*.13);
+   ctx.quadraticCurveTo(x+dw*.50,y+dh*.25,x+dw*.82,y+dh*.13);
+   ctx.lineTo(x+dw*.50,y+dh*.92);
    ctx.closePath();
    ctx.fill();
  }else{
-   const gx=x+dw*.50, gy=y+dh*.48;
-   const grad=ctx.createRadialGradient(gx,gy,0,gx,gy,dw*.34);
-   grad.addColorStop(0,'rgba(35,35,35,.22)');
-   grad.addColorStop(.62,'rgba(80,80,80,.12)');
-   grad.addColorStop(1,'rgba(255,255,255,0)');
+   const gx=x+dw*.50, gy=y+dh*.47;
+   const radius=dw*.35;
+   const grad=ctx.createRadialGradient(gx,gy,radius*.05,gx,gy,radius);
+   grad.addColorStop(0,'rgba(245,245,245,.42)');
+   grad.addColorStop(.44,'rgba(155,155,155,.32)');
+   grad.addColorStop(.78,'rgba(75,75,75,.44)');
+   grad.addColorStop(1,'rgba(25,25,25,.56)');
    ctx.fillStyle=grad;
    ctx.beginPath();
-   ctx.ellipse(x+dw*.50,y+dh*.48,dw*.34,dh*.30,0,0,Math.PI*2);
+   ctx.ellipse(x+dw*.50,y+dh*.47,dw*.35,dh*.34,0,0,Math.PI*2);
    ctx.fill();
  }
  ctx.restore();
