@@ -100,17 +100,20 @@ function drawContain(ctx,img,color,pad=.02){const w=ctx.canvas.width,h=ctx.canva
   ctx.save(); ctx.shadowColor='rgba(17,24,39,.24)'; ctx.shadowBlur=Math.max(10,w*.018); ctx.shadowOffsetX=0; ctx.shadowOffsetY=Math.max(3,h*.006); ctx.drawImage(src,x,y,dw,dh); ctx.restore();
   return {x,y,w:dw,h:dh,scale};}
 function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canvas.height, src=tintedCanvas(img,color); const front=view==='front';
-  // Mangas-elemento: redução proporcional de 2%, sem alterar o molde/corpo base.
-  // O centro de cada manga permanece no mesmo ponto aprovado para preservar o encaixe.
+  // Mangas-elemento: redução proporcional de apenas 1%. O molde/corpo base permanece intacto.
+  // A redução é ancorada no encontro superior do ombro: a linha de costura do ombro não se desloca.
   const originalDw=W*(front?0.205:0.210), originalDh=originalDw*(src.height/src.width);
-  const dw=originalDw*.98, dh=originalDh*.98;
-  const originalY=H*(front?0.1745:0.1745);
+  const dw=originalDw*.99, dh=originalDh*.99;
+  const y=H*(front?0.1745:0.1745); // mantém a linha superior aprovada do ombro
   const stageCssWidth=document.getElementById('stage').getBoundingClientRect().width;
   const sleeveCenterShift=(0.5/25.4)*96*(W/stageCssWidth);
   const baseX=side==='right' ? W*(front?0.739:0.734) : W*(front?0.056:0.052);
   const originalX=baseX + (side==='right' ? -sleeveCenterShift : sleeveCenterShift);
-  const x=originalX+(originalDw-dw)/2;
-  const y=originalY+(originalDh-dh)/2;
+
+  // Âncora interna: no lado esquerdo preserva a borda direita; no direito preserva a borda esquerda.
+  // Assim a manga encolhe para fora do encaixe, sem abrir a junta com o corpo.
+  const x=side==='right' ? originalX : originalX+(originalDw-dw);
+
   ctx.save();
   ctx.translate(x+dw/2,y+dh/2);
   if(side==='right') ctx.scale(-1,1);
