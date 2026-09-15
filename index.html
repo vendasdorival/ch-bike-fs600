@@ -115,25 +115,36 @@ function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canv
   ctx.restore();
 }
 function maskBaseNeckArtifact(ctx,geom,color){
-  // Correção cirúrgica somente no pequeno remanescente da gola V original
-  // que aparece abaixo da gola redonda na frente.
+  // Correção cirúrgica: esta pequena região deve ficar 100% branca,
+  // eliminando qualquer cinza/sombra residual do V original da imagem-base.
   const s=geom.scale, x=geom.x, y=geom.y;
   const P=(sx,sy)=>[x+sx*s,y+sy*s];
-  const a=P(635,207), b=P(659,207), c=P(647,223);
+
+  // Cobertura um pouco mais ampla que o artefato para não deixar borda cinza.
+  const a=P(611,194), b=P(683,194), c=P(647,236);
+
   ctx.save();
-  ctx.fillStyle=color;
+  ctx.fillStyle='#ffffff';
   ctx.beginPath();
   ctx.moveTo(a[0],a[1]);
-  ctx.quadraticCurveTo((a[0]+c[0])/2,c[1]-2*s,c[0],c[1]);
-  ctx.quadraticCurveTo((b[0]+c[0])/2,c[1]-2*s,b[0],b[1]);
+  ctx.quadraticCurveTo(630*s+x,202*s+y,c[0],c[1]);
+  ctx.quadraticCurveTo(664*s+x,202*s+y,b[0],b[1]);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
 }
 function drawCollar(ctx,type,color){if(state.view==='back') return; const img=imgs[type],src=tintedCanvas(img,color); const W=ctx.canvas.width,H=ctx.canvas.height; let wFrac,yFrac;
- // Ajuste V5: dimensões da gola preservadas da V4; gola redonda passa a compor visualmente o mapa-base da frente.
+ // Mantém os posicionamentos aprovados. Na gola V, reduz apenas a altura pela base em 1,5 mm.
  if(type==='round'){wFrac=.2445;yFrac=.0695}else if(type==='madrid'){wFrac=.2445;yFrac=.0675}else{wFrac=.2428;yFrac=.0685}
- const dw=W*wFrac, dh=dw*(src.height/src.width), x=(W-dw)/2, y=H*yFrac; ctx.drawImage(src,x,y,dw,dh);
+ const dw=W*wFrac;
+ let dh=dw*(src.height/src.width);
+ if(type==='v'){
+   const stageCssWidth=document.getElementById('stage').getBoundingClientRect().width;
+   const cut15mm=(1.5/25.4)*96*(W/stageCssWidth);
+   dh=Math.max(1,dh-cut15mm);
+ }
+ const x=(W-dw)/2, y=H*yFrac;
+ ctx.drawImage(src,x,y,dw,dh);
 }
 function render(){if(!imgs.front.complete) return; for(const c of Object.values(cvs)){c.getContext('2d').clearRect(0,0,c.width,c.height)}; const baseImg=state.view==='front'?imgs.front:imgs.back; const baseGeom=drawContain(cvs.base.getContext('2d'),baseImg,state.body,.025); if(state.view==='front'){maskBaseNeckArtifact(cvs.base.getContext('2d'),baseGeom,state.body);}
   // A gola redonda branca/colorida pelo corpo passa a fazer parte do visual-base da FRENTE.
