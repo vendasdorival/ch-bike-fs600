@@ -100,14 +100,17 @@ function drawContain(ctx,img,color,pad=.02){const w=ctx.canvas.width,h=ctx.canva
   ctx.save(); ctx.shadowColor='rgba(17,24,39,.24)'; ctx.shadowBlur=Math.max(10,w*.018); ctx.shadowOffsetX=0; ctx.shadowOffsetY=Math.max(3,h*.006); ctx.drawImage(src,x,y,dw,dh); ctx.restore();
   return {x,y,w:dw,h:dh,scale};}
 function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canvas.height, src=tintedCanvas(img,color); const front=view==='front';
-  // Ajuste V5 preservado: tamanho, altura e referências originais das mangas permanecem iguais.
-  // Correção fina: cada manga avança 0,5 mm em direção ao centro, sem alterar escala ou geometria.
-  const dw=W*(front?0.205:0.210), dh=dw*(src.height/src.width);
-  const y=H*(front?0.1745:0.1745);
+  // Mangas-elemento: redução proporcional de 2%, sem alterar o molde/corpo base.
+  // O centro de cada manga permanece no mesmo ponto aprovado para preservar o encaixe.
+  const originalDw=W*(front?0.205:0.210), originalDh=originalDw*(src.height/src.width);
+  const dw=originalDw*.98, dh=originalDh*.98;
+  const originalY=H*(front?0.1745:0.1745);
   const stageCssWidth=document.getElementById('stage').getBoundingClientRect().width;
   const sleeveCenterShift=(0.5/25.4)*96*(W/stageCssWidth);
   const baseX=side==='right' ? W*(front?0.739:0.734) : W*(front?0.056:0.052);
-  const x=baseX + (side==='right' ? -sleeveCenterShift : sleeveCenterShift);
+  const originalX=baseX + (side==='right' ? -sleeveCenterShift : sleeveCenterShift);
+  const x=originalX+(originalDw-dw)/2;
+  const y=originalY+(originalDh-dh)/2;
   ctx.save();
   ctx.translate(x+dw/2,y+dh/2);
   if(side==='right') ctx.scale(-1,1);
@@ -134,16 +137,51 @@ function maskBaseNeckArtifact(ctx,geom,color){
   ctx.restore();
 }
 function drawCollar(ctx,type,color){if(state.view==='back') return; const img=imgs[type],src=tintedCanvas(img,color); const W=ctx.canvas.width,H=ctx.canvas.height; let wFrac,yFrac;
- // Mantém os posicionamentos aprovados. Na gola V, reduz apenas a altura pela base em 1,5 mm.
+ // Posicionamentos aprovados preservados.
  if(type==='round'){wFrac=.2445;yFrac=.0695}else if(type==='madrid'){wFrac=.2445;yFrac=.0675}else{wFrac=.2428;yFrac=.0685}
  const dw=W*wFrac;
  let dh=dw*(src.height/src.width);
+ const stageCssWidth=document.getElementById('stage').getBoundingClientRect().width;
+
+ // Gola V: redução acumulada de 2,5 mm pela base (1,5 mm anterior + 1 mm novo).
+ // O topo permanece exatamente na posição aprovada.
  if(type==='v'){
-   const stageCssWidth=document.getElementById('stage').getBoundingClientRect().width;
-   const cut15mm=(1.5/25.4)*96*(W/stageCssWidth);
-   dh=Math.max(1,dh-cut15mm);
+   const cut25mm=(2.5/25.4)*96*(W/stageCssWidth);
+   dh=Math.max(1,dh-cut25mm);
  }
+
  const x=(W-dw)/2, y=H*yFrac;
+
+ // Sombra apenas na parte INTERNA da gola.
+ // É desenhada antes da peça, portanto as bordas continuam recebendo normalmente a cor editável.
+ ctx.save();
+ if(type==='v'){
+   const gx=x+dw*.50, gy=y+dh*.53;
+   const grad=ctx.createRadialGradient(gx,gy,0,gx,gy,dw*.31);
+   grad.addColorStop(0,'rgba(35,35,35,.24)');
+   grad.addColorStop(.58,'rgba(70,70,70,.13)');
+   grad.addColorStop(1,'rgba(255,255,255,0)');
+   ctx.fillStyle=grad;
+   ctx.beginPath();
+   ctx.moveTo(x+dw*.23,y+dh*.24);
+   ctx.quadraticCurveTo(x+dw*.50,y+dh*.38,x+dw*.77,y+dh*.24);
+   ctx.lineTo(x+dw*.50,y+dh*.90);
+   ctx.closePath();
+   ctx.fill();
+ }else{
+   const gx=x+dw*.50, gy=y+dh*.48;
+   const grad=ctx.createRadialGradient(gx,gy,0,gx,gy,dw*.34);
+   grad.addColorStop(0,'rgba(35,35,35,.22)');
+   grad.addColorStop(.62,'rgba(80,80,80,.12)');
+   grad.addColorStop(1,'rgba(255,255,255,0)');
+   ctx.fillStyle=grad;
+   ctx.beginPath();
+   ctx.ellipse(x+dw*.50,y+dh*.48,dw*.34,dh*.30,0,0,Math.PI*2);
+   ctx.fill();
+ }
+ ctx.restore();
+
+ // A gola colorida é aplicada por cima da sombra interna.
  ctx.drawImage(src,x,y,dw,dh);
 }
 function render(){if(!imgs.front.complete) return; for(const c of Object.values(cvs)){c.getContext('2d').clearRect(0,0,c.width,c.height)}; const baseImg=state.view==='front'?imgs.front:imgs.back; const baseGeom=drawContain(cvs.base.getContext('2d'),baseImg,state.body,.025); if(state.view==='front'){maskBaseNeckArtifact(cvs.base.getContext('2d'),baseGeom,state.body);}
