@@ -135,8 +135,11 @@ function drawCuff(ctx,img,color,side,view){
   // Estes quatro valores ficam isolados para podermos fazer correções milimétricas sem tocar nas mangas.
   const dw=W*(front?0.154:0.157);
   const dh=dw*(src.height/src.width);
-  const y=H*(front?0.337:0.338);
-  const x=side==='left' ? W*(front?0.018:0.016) : W*(front?0.828:0.827);
+  const mmX=W/200;   // referência local aproximada para ajuste fino
+  const mmY=H/200;
+  const y=H*(front?0.337:0.338) - (front ? 1.5*mmY : 0);
+  let x=side==='left' ? W*(front?0.018:0.016) : W*(front?0.828:0.827);
+  if(front) x += side==='left' ? 2*mmX : -2*mmX;
 
   ctx.save();
   ctx.translate(x+dw/2,y+dh/2);
