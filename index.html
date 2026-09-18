@@ -124,8 +124,8 @@ function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canv
   ctx.restore();
 }
 function maskBaseNeckArtifact(ctx,geom,color){
-  // Correção cirúrgica: esta pequena região deve ficar 100% branca,
-  // eliminando qualquer cinza/sombra residual do V original da imagem-base.
+  // Correção cirúrgica: esta pequena região acompanha a cor atual do corpo,
+  // eliminando o artefato residual do V original sem criar uma mancha branca.
   const s=geom.scale, x=geom.x, y=geom.y;
   const P=(sx,sy)=>[x+sx*s,y+sy*s];
 
@@ -133,7 +133,7 @@ function maskBaseNeckArtifact(ctx,geom,color){
   const a=P(611,194), b=P(683,194), c=P(647,236);
 
   ctx.save();
-  ctx.fillStyle='#ffffff';
+  ctx.fillStyle=color;
   ctx.beginPath();
   ctx.moveTo(a[0],a[1]);
   ctx.quadraticCurveTo(630*s+x,202*s+y,c[0],c[1]);
