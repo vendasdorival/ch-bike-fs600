@@ -133,13 +133,13 @@ function drawCuff(ctx,img,color,side,view){
 
   // Ajuste fino inicial dos punhos. A peça da direita é o espelho exato da esquerda.
   // Estes quatro valores ficam isolados para podermos fazer correções milimétricas sem tocar nas mangas.
-  const dw=W*(front?0.154:0.157);
+  const dw=W*(front?0.154:0.157)*0.85;
   const dh=dw*(src.height/src.width);
   const mmX=W/200;   // referência local aproximada para ajuste fino
   const mmY=H/200;
-  const y=H*(front?0.337:0.338) + (front ? 1.15*mmY : 0);
+  const y=H*(front?0.337:0.338) + (front ? 1.15*mmY : 0) - 2*mmY;
   let x=side==='left' ? W*(front?0.018:0.016) : W*(front?0.828:0.827);
-  if(front) x += side==='left' ? 6.4*mmX : -6.4*mmX;
+  if(front) x += side==='left' ? 7.55*mmX : -7.55*mmX;
 
   ctx.save();
   ctx.translate(x+dw/2,y+dh/2);
