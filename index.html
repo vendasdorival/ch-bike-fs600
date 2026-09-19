@@ -146,8 +146,10 @@ function drawCuff(ctx,img,color,side,view){
 
   // Posição calibrada a partir do último print real/Corel.
   // O PNG é mantido proporcional, sem deformação.
-  const x=W*0.0555;
-  const y=H*0.3425;
+  const mmX=W/200;
+  const mmY=H/200;
+  const x=W*0.0555 + 1*mmX;
+  const y=H*0.3425 - 1*mmY;
   const angle=-0.010;
 
   ctx.save();
