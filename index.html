@@ -148,8 +148,8 @@ function drawCuff(ctx,img,color,side,view){
   // O PNG é mantido proporcional, sem deformação.
   const mmX=W/200;
   const mmY=H/200;
-  const x=W*0.0555 + 1*mmX;
-  const y=H*0.3425 - 1*mmY;
+  const x=W*0.0555 + 2*mmX;
+  const y=H*0.3425 - 1.5*mmY;
   const angle=-0.010;
 
   ctx.save();
@@ -162,7 +162,16 @@ function drawCuff(ctx,img,color,side,view){
 
   ctx.translate(x+dw/2,y+dh/2);
   ctx.rotate(angle);
+
+  // Sombra de contato suave em torno do punho.
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,0.22)';
+  ctx.shadowBlur=Math.max(2,H*0.006);
+  ctx.shadowOffsetX=0;
+  ctx.shadowOffsetY=Math.max(1,H*0.0015);
   ctx.drawImage(src,-dw/2,-dh/2,dw,dh);
+  ctx.restore();
+
   ctx.restore();
 }
 
