@@ -128,41 +128,43 @@ function drawSleeve(ctx,img,color,side,view){const W=ctx.canvas.width,H=ctx.canv
 }
 
 function drawCuff(ctx,img,color,side,view){
-  const W=ctx.canvas.width,H=ctx.canvas.height,src=tintedCanvas(img,color);
-  const front=view==='front';
-
-  // REFERÊNCIA FINAL DOS PUNHOS
-  // Frente calibrada separadamente em cada lado.
-  // A peça deixa de depender de um espelhamento de posição perfeito:
-  // cada lado possui centro, altura e rotação próprios.
-  const baseW=W*(front?0.154:0.157);
-  const dw=baseW*(front?0.88:0.85);
-  const dh=dw*(src.height/src.width);
-
-  let cx, cy, angle=0;
-
-  if(front){
-    if(side==='left'){
-      // Leve deslocamento para fora e para baixo em relação à versão anterior.
-      cx=W*0.1280;
-      cy=H*0.3690;
-      angle=-0.012;
-    }else{
-      // Correção independente para compensar a assimetria visual da manga direita.
-      cx=W*0.8505;
-      cy=H*0.3690;
-      angle=0.012;
-    }
-  }else{
-    cx=(side==='left' ? W*0.016 : W*0.827)+dw/2;
-    cy=H*0.338+dh/2;
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  if(view!=='front'){
+    const src=tintedCanvas(img,color),dw=W*0.157*0.85,dh=dw*(src.height/src.width);
+    const x=side==='left'?W*0.016:W*0.827,y=H*0.338;
+    ctx.save();ctx.translate(x+dw/2,y+dh/2);
+    if(side==='right')ctx.scale(-1,1);
+    ctx.drawImage(src,-dw/2,-dh/2,dw,dh);ctx.restore();return;
   }
 
+  // Geometria-mestre esquerda. O lado direito é espelho matemático exato.
   ctx.save();
-  ctx.translate(cx,cy);
-  ctx.rotate(angle);
-  if(side==='right') ctx.scale(-1,1);
-  ctx.drawImage(src,-dw/2,-dh/2,dw,dh);
+  if(side==='right'){ctx.translate(W,0);ctx.scale(-1,1);}
+
+  // Borda superior do punho = linha final da manga.
+  const x0=W*0.061,y0=H*0.315;
+  const x1=W*0.128,y1=H*0.362;
+  const x2=W*0.205,y2=H*0.382;
+  const t=H*0.0205;
+
+  ctx.beginPath();
+  ctx.moveTo(x0,y0);
+  ctx.quadraticCurveTo(x1,y1,x2,y2);
+  ctx.quadraticCurveTo(x1,y1+t*1.18,x0,y0+t);
+  ctx.closePath();
+  ctx.fillStyle=color;ctx.fill();
+
+  // Volume visual sem deixar a caixa/rotação do PNG controlar o encaixe.
+  const g=ctx.createLinearGradient(0,y0,0,y2+t);
+  g.addColorStop(0,'rgba(255,255,255,.25)');
+  g.addColorStop(.45,'rgba(255,255,255,0)');
+  g.addColorStop(1,'rgba(0,0,0,.18)');
+  ctx.fillStyle=g;ctx.fill();
+
+  // Linha de contato exatamente na barra da manga.
+  ctx.beginPath();ctx.moveTo(x0,y0);ctx.quadraticCurveTo(x1,y1,x2,y2);
+  ctx.lineWidth=Math.max(1,H*0.002);
+  ctx.strokeStyle='rgba(0,0,0,.14)';ctx.stroke();
   ctx.restore();
 }
 
