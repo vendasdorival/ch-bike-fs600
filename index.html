@@ -131,31 +131,35 @@ function drawCuff(ctx,img,color,side,view){
   const W=ctx.canvas.width,H=ctx.canvas.height,src=tintedCanvas(img,color);
   const front=view==='front';
 
-  // Punhos: ajuste fino independente por lado.
-  // Mantemos a proporção aprovada e encaixamos cada peça na tangente da barra da manga.
+  // REFERÊNCIA FINAL DOS PUNHOS
+  // Frente calibrada separadamente em cada lado.
+  // A peça deixa de depender de um espelhamento de posição perfeito:
+  // cada lado possui centro, altura e rotação próprios.
   const baseW=W*(front?0.154:0.157);
-  const dw=baseW*0.85;
+  const dw=baseW*(front?0.88:0.85);
   const dh=dw*(src.height/src.width);
 
-  let x, y, angle=0;
+  let cx, cy, angle=0;
 
   if(front){
     if(side==='left'){
-      x=W*0.0615;
-      y=H*0.3225;
-      angle=-0.018;
+      // Leve deslocamento para fora e para baixo em relação à versão anterior.
+      cx=W*0.1280;
+      cy=H*0.3690;
+      angle=-0.012;
     }else{
-      x=W*0.7835;
-      y=H*0.3225;
-      angle=0.018;
+      // Correção independente para compensar a assimetria visual da manga direita.
+      cx=W*0.8505;
+      cy=H*0.3690;
+      angle=0.012;
     }
   }else{
-    x=side==='left' ? W*0.016 : W*0.827;
-    y=H*0.338;
+    cx=(side==='left' ? W*0.016 : W*0.827)+dw/2;
+    cy=H*0.338+dh/2;
   }
 
   ctx.save();
-  ctx.translate(x+dw/2,y+dh/2);
+  ctx.translate(cx,cy);
   ctx.rotate(angle);
   if(side==='right') ctx.scale(-1,1);
   ctx.drawImage(src,-dw/2,-dh/2,dw,dh);
