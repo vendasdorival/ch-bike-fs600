@@ -131,18 +131,32 @@ function drawCuff(ctx,img,color,side,view){
   const W=ctx.canvas.width,H=ctx.canvas.height,src=tintedCanvas(img,color);
   const front=view==='front';
 
-  // Ajuste fino inicial dos punhos. A peça da direita é o espelho exato da esquerda.
-  // Estes quatro valores ficam isolados para podermos fazer correções milimétricas sem tocar nas mangas.
-  const dw=W*(front?0.154:0.157)*0.85;
+  // Punhos: ajuste fino independente por lado.
+  // Mantemos a proporção aprovada e encaixamos cada peça na tangente da barra da manga.
+  const baseW=W*(front?0.154:0.157);
+  const dw=baseW*0.85;
   const dh=dw*(src.height/src.width);
-  const mmX=W/200;   // referência local aproximada para ajuste fino
-  const mmY=H/200;
-  const y=H*(front?0.337:0.338) + (front ? 1.15*mmY : 0) - 2*mmY;
-  let x=side==='left' ? W*(front?0.018:0.016) : W*(front?0.828:0.827);
-  if(front) x += side==='left' ? 7.55*mmX : -7.55*mmX;
+
+  let x, y, angle=0;
+
+  if(front){
+    if(side==='left'){
+      x=W*0.0615;
+      y=H*0.3225;
+      angle=-0.018;
+    }else{
+      x=W*0.7835;
+      y=H*0.3225;
+      angle=0.018;
+    }
+  }else{
+    x=side==='left' ? W*0.016 : W*0.827;
+    y=H*0.338;
+  }
 
   ctx.save();
   ctx.translate(x+dw/2,y+dh/2);
+  ctx.rotate(angle);
   if(side==='right') ctx.scale(-1,1);
   ctx.drawImage(src,-dw/2,-dh/2,dw,dh);
   ctx.restore();
